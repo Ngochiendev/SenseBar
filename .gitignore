@@ -17,6 +17,7 @@ DerivedData/
 # Project specific
 docs/
 .agents/
+.codegraph
 
 # Do not push Swift source code (folders only)
 *.swift
