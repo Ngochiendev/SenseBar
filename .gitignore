@@ -1,5 +1,6 @@
 # Xcode & Swift Package Manager
 /.build
+/build
 /Packages
 xcuserdata/
 DerivedData/
@@ -14,13 +15,9 @@ DerivedData/
 *.swp
 *~
 
-# Project specific
+# Local reference & scratch folders (never tracked)
 docs/
 .agents/
 .codegraph
 s-src/
-
-# Do not push Swift source code (folders only)
-*.swift
-!Package.swift
-!.gitkeep
+test/

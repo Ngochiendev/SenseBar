@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleAllowMixedLocalizations</key>
+	<true/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>vi</string>
+	<key>CFBundleDisplayName</key>
+	<string>SenseBar</string>
+	<key>CFBundleExecutable</key>
+	<string>SenseBar</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.sensebar.SenseBar</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>vi</string>
+		<string>en</string>
+	</array>
+	<key>CFBundleName</key>
+	<string>SenseBar</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>MacOSX</string>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>SenseBar sử dụng Tự động hóa (Automation) để điều khiển trình phát nhạc và đồng bộ thông tin bài hát trên Dynamic Island.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>SenseBar sử dụng luồng âm thanh nội bộ của từng ứng dụng để điều chỉnh âm lượng độc lập và hiển thị sóng nhạc trên Dynamic Island. Không có dữ liệu âm thanh nào rời khỏi máy Mac của bạn.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>SenseBar sử dụng Bluetooth để đọc dung lượng pin của các thiết bị ngoại vi đang kết nối.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 SenseBar by ngochiendev</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+</dict>
+</plist>
