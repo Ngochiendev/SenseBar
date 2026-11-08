@@ -280,10 +280,15 @@ struct SettingsWindowView: View {
                 }
             }
 
-            // Tinh chỉnh kích thước viên nang (Capsule fit) - SenseBar Studio
-            settingsCard(title: l10n.string(vi: "Căn chỉnh kích thước (Capsule fit)", en: "Capsule fit")) {
+            // Tinh chỉnh kích thước (Capsule fit / Notch fit) - SenseBar Studio
+            let isPill = notchStyle == "pill"
+            let fitTitle = isPill
+                ? l10n.string(vi: "Căn chỉnh kích thước (Capsule fit)", en: "Capsule fit")
+                : l10n.string(vi: "Căn chỉnh kích thước (Notch fit)", en: "Notch fit")
+
+            settingsCard(title: fitTitle) {
                 VStack(alignment: .leading, spacing: 14) {
-                    capsulePreviewMockup
+                    screenMenuPreviewMockup
 
                     Divider().opacity(0.4)
 
@@ -302,19 +307,27 @@ struct SettingsWindowView: View {
                             range: -4...6,
                             step: 1
                         )
-                        sliderSettingRow(
-                            icon: "arrow.down.to.line",
-                            title: l10n.string(vi: "Khoảng cách mép trên", en: "Distance from top"),
-                            value: $capsuleFitDrop,
-                            range: -6...16,
-                            step: 1
-                        )
+                        if isPill {
+                            sliderSettingRow(
+                                icon: "arrow.down.to.line",
+                                title: l10n.string(vi: "Khoảng cách mép trên", en: "Distance from top"),
+                                value: $capsuleFitDrop,
+                                range: -6...16,
+                                step: 1
+                            )
+                        }
                     }
 
-                    Text(l10n.string(
-                        vi: "Thay đổi kích thước và hạ thấp vị trí của viên nang từ mép trên màn hình đối với màn hình không có tai thỏ.",
-                        en: "Resizes the capsule and lowers it from the top of the screen on displays without a notch."
-                    ))
+                    Text(isPill
+                        ? l10n.string(
+                            vi: "Thay đổi kích thước và khoảng cách hạ thấp của viên nang trên thanh Menu Bar đối với màn hình không có tai thỏ.",
+                            en: "Resizes the capsule and lowers it from the top of the menu bar on displays without a notch."
+                        )
+                        : l10n.string(
+                            vi: "Thay đổi chiều rộng và chiều cao của tai thỏ ảo gắn liền thanh Menu Bar đối với màn hình không có tai thỏ.",
+                            en: "Resizes the width and height of the virtual notch on the menu bar on displays without a notch."
+                        )
+                    )
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .padding(.top, 2)
@@ -495,36 +508,54 @@ struct SettingsWindowView: View {
             NotchDynamicIslandController.shared.syncVisibility()
         } label: {
             VStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isSelected ? Color.blue.opacity(0.12) : Color.primary.opacity(0.04))
-                        .frame(height: 52)
+                ZStack(alignment: .top) {
+                    // Nền desktop thu nhỏ
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: isSelected
+                                    ? [Color.blue.opacity(0.20), Color.blue.opacity(0.06)]
+                                    : [Color.primary.opacity(0.06), Color.primary.opacity(0.02)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: 54)
 
-                    VStack {
-                        Rectangle()
-                            .fill(Color.primary.opacity(0.08))
-                            .frame(height: 10)
+                    // Thanh Menu Bar mờ ảo
+                    HStack(spacing: 4) {
+                        Image(systemName: "apple.logo")
+                            .font(.system(size: 6))
+                            .opacity(0.6)
                         Spacer()
+                        Circle().fill(Color.primary.opacity(0.35)).frame(width: 3, height: 3)
+                        Circle().fill(Color.primary.opacity(0.35)).frame(width: 3, height: 3)
                     }
+                    .padding(.horizontal, 6)
+                    .frame(height: 14)
+                    .background(
+                        Rectangle().fill(Color.primary.opacity(0.06))
+                    )
 
+                    // Capsule hoặc Notch nằm trên Menu Bar
                     if id == "pill" {
                         Capsule(style: .continuous)
                             .fill(isSelected ? Color.blue : Color.primary.opacity(0.75))
-                            .frame(width: 50, height: 12)
-                            .padding(.top, 6)
-                            .shadow(color: isSelected ? Color.blue.opacity(0.4) : Color.black.opacity(0.2), radius: 3, y: 1)
+                            .frame(width: 44, height: 8.5)
+                            .padding(.top, 2.7)
+                            .shadow(color: isSelected ? Color.blue.opacity(0.4) : Color.black.opacity(0.2), radius: 2, y: 1)
                     } else {
-                        NotchAttachedShape(topShoulder: 3.5, bottomRadius: 4.5)
+                        NotchAttachedShape(topShoulder: 3, bottomRadius: 4)
                             .fill(isSelected ? Color.blue : Color.primary.opacity(0.75))
-                            .frame(width: 50, height: 14)
-                            .frame(maxHeight: .infinity, alignment: .top)
+                            .frame(width: 46, height: 14)
+                            .shadow(color: isSelected ? Color.blue.opacity(0.4) : Color.black.opacity(0.2), radius: 2, y: 1)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                HStack(spacing: 4) {
+                HStack(spacing: 5) {
                     Circle()
-                        .fill(isSelected ? Color.blue : Color.secondary.opacity(0.4))
+                        .fill(isSelected ? Color.blue : Color.secondary.opacity(0.35))
                         .frame(width: 6, height: 6)
 
                     Text(title)
@@ -533,80 +564,148 @@ struct SettingsWindowView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(8)
+            .padding(7)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? Color.blue.opacity(0.06) : Color.primary.opacity(0.02))
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(isSelected ? Color.blue.opacity(0.08) : Color.primary.opacity(0.02))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Color.blue.opacity(0.4) : Color.primary.opacity(0.05), lineWidth: 1.2)
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(isSelected ? Color.blue.opacity(0.45) : Color.primary.opacity(0.06), lineWidth: 1.2)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
         .buttonStyle(.plain)
     }
 
-    private var capsulePreviewMockup: some View {
-        VStack(spacing: 6) {
+    private var screenMenuPreviewMockup: some View {
+        let isPill = notchStyle == "pill"
+        return VStack(spacing: 8) {
             ZStack(alignment: .top) {
+                // 1. Màn hình Desktop (Wallpaper phong cách macOS sang trọng)
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [Color.black.opacity(0.85), Color.black.opacity(0.95)],
-                            startPoint: .top,
-                            endPoint: .bottom
+                            colors: [
+                                Color(red: 0.16, green: 0.22, blue: 0.38),
+                                Color(red: 0.09, green: 0.12, blue: 0.20)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
                     )
-                    .frame(height: 72)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    )
+                    .frame(height: 86)
 
-                Rectangle()
-                    .fill(Color.white.opacity(0.06))
-                    .frame(height: 12)
+                // 2. Thanh Menu Bar macOS (Nền kính mờ bán trong suốt)
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "apple.logo")
+                            .font(.system(size: 9, weight: .bold))
+                        Text("Finder")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text("File")
+                            .font(.system(size: 8.5))
+                            .opacity(0.7)
+                        Text("Edit")
+                            .font(.system(size: 8.5))
+                            .opacity(0.7)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.leading, 12)
 
-                Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.blue.opacity(0.9), Color.cyan.opacity(0.8)],
-                            startPoint: .leading,
-                            endPoint: .trailing
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "wifi")
+                            .font(.system(size: 7.5))
+                        Image(systemName: "battery.100")
+                            .font(.system(size: 7.5))
+                        Image(systemName: "switch.2")
+                            .font(.system(size: 7.5))
+                        Text("9:41")
+                            .font(.system(size: 8.5, weight: .medium))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.trailing, 12)
+                }
+                .frame(height: 24)
+                .background(
+                    Rectangle()
+                        .fill(Color.white.opacity(0.12))
+                        .background(.ultraThinMaterial)
+                )
+
+                // 3. Dynamic Island (Capsule hoặc Notch) trực tiếp trên Menu Bar
+                if isPill {
+                    // Chế độ Capsule: Viên nang nổi nằm trên Menu Bar
+                    Capsule(style: .continuous)
+                        .fill(Color.black)
+                        .frame(
+                            width: max(45, 115 + CGFloat(capsuleFitWidth) * 0.42),
+                            height: max(10, 16 + CGFloat(capsuleFitHeight) * 0.8)
                         )
-                    )
-                    .frame(
-                        width: max(40, 110 + CGFloat(capsuleFitWidth) * 0.45),
-                        height: max(10, 18 + CGFloat(capsuleFitHeight) * 0.8)
-                    )
-                    .padding(.top, max(1, 4 + CGFloat(capsuleFitDrop) * 0.5))
-                    .overlay(
-                        HStack(spacing: 4) {
-                            Circle().fill(Color.white.opacity(0.8)).frame(width: 3.5, height: 3.5)
-                            Spacer()
-                            Image(systemName: "waveform")
-                                .font(.system(size: 7, weight: .bold))
-                                .foregroundStyle(Color.white.opacity(0.9))
-                        }
-                        .padding(.horizontal, 8)
                         .padding(.top, max(1, 4 + CGFloat(capsuleFitDrop) * 0.5))
-                    )
-                    .shadow(color: Color.blue.opacity(0.4), radius: 6, x: 0, y: 2)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitWidth)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitHeight)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitDrop)
+                        .overlay(
+                            HStack(spacing: 4) {
+                                Circle().fill(Color(red: 0.15, green: 0.85, blue: 0.45)).frame(width: 3.5, height: 3.5)
+                                Spacer()
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 7, weight: .bold))
+                                    .foregroundStyle(Color(red: 0.20, green: 0.60, blue: 1.0))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.top, max(1, 4 + CGFloat(capsuleFitDrop) * 0.5))
+                        )
+                        .shadow(color: Color.black.opacity(0.5), radius: 5, x: 0, y: 2)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitWidth)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitHeight)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitDrop)
+                } else {
+                    // Chế độ Notch: Tai thỏ đính từ mép trên phủ xuống Menu Bar
+                    NotchAttachedShape(topShoulder: 5, bottomRadius: 7)
+                        .fill(Color.black)
+                        .frame(
+                            width: max(55, 125 + CGFloat(capsuleFitWidth) * 0.45),
+                            height: max(14, 24 + CGFloat(capsuleFitHeight) * 0.8)
+                        )
+                        .overlay(
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color(red: 0.08, green: 0.08, blue: 0.12))
+                                    .frame(width: 5, height: 5)
+                                    .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+                                Spacer()
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 7, weight: .bold))
+                                    .foregroundStyle(Color(red: 0.20, green: 0.60, blue: 1.0))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.top, 4)
+                        )
+                        .shadow(color: Color.black.opacity(0.5), radius: 5, x: 0, y: 2)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitWidth)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitHeight)
+                }
             }
+            .frame(height: 86)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
 
+            // Thanh thông tin & Nút reset
             HStack {
-                Text(l10n.string(vi: "Mô phỏng vị trí trực tiếp trên màn hình", en: "Live preview on display"))
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
+                Text(isPill
+                    ? l10n.string(vi: "Mô phỏng viên nang (Capsule) trực tiếp trên thanh Menu Bar", en: "Live preview of Capsule on Menu Bar")
+                    : l10n.string(vi: "Mô phỏng tai thỏ ảo (Notch) trực tiếp trên thanh Menu Bar", en: "Live preview of Notch on Menu Bar")
+                )
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
 
                 Spacer()
 
-                if capsuleFitWidth != 0 || capsuleFitHeight != 0 || capsuleFitDrop != 0 {
+                if capsuleFitWidth != 0 || capsuleFitHeight != 0 || (isPill && capsuleFitDrop != 0) {
                     Button {
                         withAnimation {
                             capsuleFitWidth = 0
