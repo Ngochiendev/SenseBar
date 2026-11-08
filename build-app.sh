@@ -116,14 +116,8 @@ staple_with_retry() {
 
 if [[ "$BUILD_DMG" -eq 1 ]]; then
   DMG_PATH="build/SenseBar.dmg"
-  DMG_ROOT="build/dmg-root"
-  echo "▸ Packaging $DMG_PATH..."
-  rm -rf "$DMG_ROOT" "$DMG_PATH"
-  mkdir -p "$DMG_ROOT"
-  cp -R "$STAGE" "$DMG_ROOT/SenseBar.app"
-  ln -s /Applications "$DMG_ROOT/Applications"
-  hdiutil create -volname "SenseBar" -srcfolder "$DMG_ROOT" -ov -format UDZO "$DMG_PATH" >/dev/null
-  rm -rf "$DMG_ROOT"
+  echo "▸ Packaging $DMG_PATH using SenseBar Professional DMG Designer..."
+  swift Tools/MakeDMG.swift
   if [[ "$SIGN_IDENTITY" != "-" ]]; then
     codesign --force --timestamp -s "$SIGN_IDENTITY" "$DMG_PATH"
 

@@ -1,89 +1,113 @@
-# SenseBar
-
 <p align="center">
-  <img src="Resources/Brand/AppIcon-Default.png" width="128" height="128" alt="SenseBar Logo">
+  <img src="Resources/Brand/AppIcon-Default.png" width="128" height="128" alt="SenseBar">
 </p>
 
+<h1 align="center">SenseBar</h1>
+
 <p align="center">
-  <strong>Tiện ích thanh Menu Bar gọn nhẹ cho macOS</strong><br>
-  Tai thỏ Dynamic Island · Bộ trộn âm thanh từng ứng dụng (Audio Studio)
+  <strong>Dynamic Island cho MacBook và bộ trộn âm lượng từng ứng dụng, gọn nhẹ trên thanh Menu Bar.</strong>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/macOS-14.0%2B-black?style=flat-square&logo=apple" alt="macOS 14+">
-  <img src="https://img.shields.io/badge/Architecture-Apple%20Silicon%20%7C%20Intel-blue?style=flat-square" alt="Apple Silicon & Intel">
-  <img src="https://img.shields.io/badge/Language-Swift%206%20%7C%20SwiftUI-orange?style=flat-square&logo=swift" alt="Swift 6 & SwiftUI">
-  <img src="https://img.shields.io/badge/License-GPL--3.0-green?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/Apple%20Silicon%20%7C%20Intel-Universal-blue?style=flat-square" alt="Universal">
+  <img src="https://img.shields.io/badge/Swift-6-orange?style=flat-square&logo=swift" alt="Swift 6">
+  <img src="https://img.shields.io/badge/License-GPL--3.0-green?style=flat-square" alt="GPL-3.0">
+</p>
+
+<p align="center">
+  <img src="assets/install-sensebar.gif" width="560" alt="Kéo SenseBar vào Applications để cài đặt">
 </p>
 
 ---
 
 ## Giới thiệu
 
-**SenseBar** là tiện ích hệ thống thế hệ mới dành cho macOS, tối ưu hiệu năng siêu nhẹ và tập trung vào 2 nhóm tính năng cốt lõi:
+SenseBar gồm hai tính năng, bật hoặc tắt riêng từng cái:
 
-1. **Tai thỏ & Dynamic Island**: Biến phần tai thỏ MacBook hoặc cạnh trên màn hình thành khu vực điều khiển nhanh đa phương tiện, tích hợp sóng nhạc chuyển động và cử chỉ cuộn chuột tăng giảm âm lượng/độ sáng.
-2. **Bộ trộn âm thanh (Audio Studio)**: Điều chỉnh âm lượng độc lập cho từng ứng dụng (0% – 200%), chuyển đổi tức thì thiết bị Loa/Micro và tự động ngắt tiếng bảo vệ thính giác khi rút tai nghe.
+- **Tai thỏ & Dynamic Island**: biến tai thỏ MacBook thành khu vực điều khiển nhạc đang phát.
+- **Bộ trộn âm thanh (Audio Studio)**: chỉnh âm lượng loa tổng và âm lượng riêng cho từng ứng dụng, từ 0% đến 200%.
 
-> 💡 **Khả năng thích ứng màn hình thông minh**:
-> - Trên các dòng máy có tai thỏ (MacBook Air/Pro Apple Silicon): Giao diện tự động ôm khít tai thỏ vật lý.
-> - Trên các dòng máy **không có tai thỏ** (toàn bộ **Mac Intel**, Mac mini, Mac Studio, iMac hoặc khi sử dụng **màn hình rời ngoài**): SenseBar tự động hiển thị dưới dạng **Viên nang nổi (Floating Capsule)** thanh thoát, đầy đủ mọi tính năng.
+Máy không có tai thỏ (Mac Intel, Mac mini, iMac, màn hình rời) vẫn dùng đầy đủ. SenseBar tự chuyển sang dạng **viên nang nổi** ở giữa thanh Menu Bar.
 
----
-
-## Khả năng tương thích
-
-- **Kiến trúc phần cứng**: Bản build **Universal Binary** chạy Native mượt mà trên cả hai nền tảng:
-  - **Apple Silicon**: M1, M2, M3, M4 (Bản thường, Pro, Max, Ultra).
-  - **Intel Mac**: Toàn bộ máy Mac chạy chip Intel 64-bit (`x86_64`) mà không cần giả lập qua Rosetta 2.
-- **Hệ điều hành yêu cầu**: **macOS 14.0 (Sonoma)** trở lên.
+<p align="center">
+  <img src="assets/dynamic-island-notch.gif" width="46%" alt="Dynamic Island ôm tai thỏ">
+  <img src="assets/dynamic-island-capsule.gif" width="46%" alt="Dynamic Island dạng viên nang">
+</p>
 
 ---
 
-## Các tính năng chính
+## Tính năng
 
-### 1. Tai thỏ & Dynamic Island
-* **Trình phát nhạc (Now Playing)**: Tự động bắt thông tin bài hát đang phát (Apple Music, Spotify, Chrome, YouTube...), hiển thị ảnh bìa album và các nút điều khiển chuyển bài nhanh.
-* **Sóng nhạc (Audio Visualizer)**: Hiệu ứng sóng âm sống động theo điệu nhạc, tự động trích xuất màu sắc chủ đạo từ ảnh bìa đĩa.
-* **Cuộn chuột chỉnh nhanh**: Rê chuột lên vùng tai thỏ / viên nang và cuộn con lăn để tăng giảm nhanh âm lượng hoặc độ sáng màn hình.
-* **Hiệu ứng Liquid Glass**: Giao diện kính mờ xuyên thấu tinh tế chuẩn phong cách macOS nguyên bản.
+### Tai thỏ & Dynamic Island
 
-### 2. Bộ trộn âm thanh (Audio Studio)
-* **Âm lượng từng ứng dụng**: Tăng/giảm âm lượng độc lập cho từng ứng dụng đang chạy (Safari, Chrome, Spotify, Discord...) mà không cần cài thêm kext hay driver âm thanh ngoài.
-* **Khuếch đại âm lượng đến 200%**: Tăng âm lượng vượt ngưỡng mặc định cho các cuộc gọi hoặc video có âm thanh gốc quá nhỏ.
-* **Đổi nhanh Loa / Micro & Tắt nhanh Micro**: Chuyển đổi thiết bị đầu ra/đầu vào tức thì và ngắt nhanh micro toàn hệ thống.
-* **An toàn tai nghe (Headphone Safety)**: Tự động ngắt âm lượng loa ngoài khi ngắt kết nối tai nghe (jack 3.5mm hoặc Bluetooth) đột ngột.
+- **Đang phát**: hiện ảnh bìa, tên bài hát và nút phát/tạm dừng, chuyển bài, tua. Hoạt động với các trình phát có báo Now Playing cho macOS (Apple Music, Spotify, trình duyệt...).
+- **Sóng nhạc**: thanh sóng chuyển động theo trạng thái phát, lấy màu từ ảnh bìa.
+- **Mở rộng khi rê chuột**: rê chuột vào tai thỏ hoặc viên nang để mở bảng điều khiển, rời chuột thì tự thu gọn.
+- **Hai kiểu hiển thị** cho màn hình không có tai thỏ: ôm sát như tai thỏ ảo, hoặc viên nang nổi. Có thanh trượt chỉnh chiều rộng, chiều cao và khoảng cách mép trên, kèm hình xem trước trực tiếp.
+- **Chọn màn hình hiển thị**: tự động, màn hình tích hợp, màn hình chính, theo con trỏ chuột hoặc tất cả màn hình.
+- **Ẩn khi toàn màn hình**: tự ẩn khi xem video hoặc chơi game toàn màn hình.
+- **Liquid Glass**: dùng kính lỏng gốc trên macOS 26. Trên macOS 14–15 và máy Intel, SenseBar dùng lớp kính mờ nhiều tầng giả lập để nhẹ và vẫn đẹp.
+
+### Bộ trộn âm thanh (Audio Studio)
+
+- **Âm lượng loa tổng** và tắt tiếng nhanh, có hiển thị tên thiết bị đầu ra hiện tại.
+- **Âm lượng từng ứng dụng** từ 0% đến 200%, kèm tắt tiếng riêng từng ứng dụng.
+- Không cần cài driver âm thanh ảo hay kext của bên thứ ba.
+
+### Khác
+
+- Giao diện tiếng Việt và tiếng Anh.
+- Tùy chọn khởi động cùng macOS.
+- Một bảng điều khiển duy nhất trên Menu Bar chứa toàn bộ cài đặt.
 
 ---
 
-## Cài đặt nhanh
+## Yêu cầu hệ thống
 
-Tải bản phát hành chính thức dạng file `.dmg` tại [GitHub Releases](https://github.com/Ngochiendev/SenseBar/releases):
-
-1. Tải file **`SenseBar-vX.X.X-macOS-Universal.dmg`**.
-2. Mở file `.dmg` và kéo biểu tượng **SenseBar** vào thư mục **Applications**.
-3. Khởi chạy SenseBar từ Launchpad hoặc Spotlight, sau đó cấp quyền **Trợ năng (Accessibility)** để trải nghiệm đầy đủ các tính năng điều khiển.
+- **macOS 14.0 (Sonoma)** trở lên.
+- Bản phát hành là **Universal Binary**, chạy native trên Apple Silicon (M1 trở lên) và Mac Intel 64-bit, không qua Rosetta.
 
 ---
 
-## Dành cho nhà phát triển (Build từ mã nguồn)
+## Cài đặt
 
-Yêu cầu môi trường: **macOS 14.0+**, **Xcode Command Line Tools** (hỗ trợ Swift 6).
+1. Tải file `SenseBar-vX.X.X-macOS-Universal.dmg` tại [GitHub Releases](https://github.com/Ngochiendev/SenseBar/releases).
+2. Mở file `.dmg`, kéo **SenseBar** vào thư mục **Applications**.
+3. Mở SenseBar từ Launchpad hoặc Spotlight.
+4. Cấp quyền **Trợ năng (Accessibility)** khi được hỏi. Quyền này cần để Dynamic Island nhận chuột và nhận biết ứng dụng toàn màn hình. Sau khi bật công tắc trong Cài đặt Hệ thống, SenseBar tự nhận ngay, không cần mở lại ứng dụng.
+
+> Mọi dữ liệu xử lý hoàn toàn trên máy của bạn, SenseBar không gửi thông tin ra ngoài.
+
+---
+
+## Build từ mã nguồn
+
+Yêu cầu: macOS 14.0+, Xcode Command Line Tools (Swift 6).
 
 ```bash
-# 1. Clone mã nguồn dự án
 git clone https://github.com/Ngochiendev/SenseBar.git
 cd SenseBar
 
-# 2. Biên dịch và đóng gói SenseBar.app (Universal Binary)
+# Bản debug nhanh (kiến trúc của máy), mở thử ngay
+./build-app.sh --debug && open build/SenseBar.app
+
+# Bản release Universal (arm64 + x86_64)
 ./build-app.sh
 
-# 3. Chạy thử nghiệm ứng dụng
-open build/SenseBar.app
+# Đóng gói file .dmg
+./build-app.sh --dmg
 ```
 
+Kiểm tra nhanh các thành phần cốt lõi:
+
+```bash
+build/SenseBar.app/Contents/MacOS/SenseBar --selftest
+```
 ---
 
 ## Giấy phép
 
-Dự án được phân phối dưới giấy phép **GNU General Public License v3.0 (GPL-3.0)** — xem chi tiết tại file [LICENSE](LICENSE).
+SenseBar được phát hành theo giấy phép **GNU General Public License v3.0**. Xem chi tiết tại [LICENSE](LICENSE).
+
+Tác giả: **Ngochiendev**
