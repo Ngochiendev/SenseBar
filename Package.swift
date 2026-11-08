@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 5.9
 
 import PackageDescription
 
@@ -14,17 +14,11 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "SenseBar",
-            path: "Sources/SenseBar",
-            swiftSettings: [
-                .swiftLanguageMode(.v5)
-            ]
+            path: "Sources/SenseBar"
         ),
         .target(
             name: "NowPlayingBridge",
-            path: "Sources/NowPlayingBridge",
-            swiftSettings: [
-                .swiftLanguageMode(.v5)
-            ]
+            path: "Sources/NowPlayingBridge"
         )
     ]
 )

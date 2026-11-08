@@ -31,14 +31,22 @@ done
 
 ARCH_FLAGS=()
 if [[ "$UNIVERSAL" -eq 1 ]]; then
-  ARCH_FLAGS=(--arch arm64 --arch x86_64)
   echo "▸ Compiling SenseBar ($CONFIG, Universal: arm64 + x86_64)..."
+  swift build -c "$CONFIG" --arch arm64
+  swift build -c "$CONFIG" --arch x86_64
+
+  ARM_DIR="$(swift build -c "$CONFIG" --arch arm64 --show-bin-path)"
+  INTEL_DIR="$(swift build -c "$CONFIG" --arch x86_64 --show-bin-path)"
+  BIN_DIR="build/universal-bin"
+  mkdir -p "$BIN_DIR"
+
+  lipo -create -output "$BIN_DIR/SenseBar" "$ARM_DIR/SenseBar" "$INTEL_DIR/SenseBar"
+  lipo -create -output "$BIN_DIR/libSenseBarNowPlaying.dylib" "$ARM_DIR/libSenseBarNowPlaying.dylib" "$INTEL_DIR/libSenseBarNowPlaying.dylib"
 else
   echo "▸ Compiling SenseBar ($CONFIG, Native)..."
+  swift build -c "$CONFIG"
+  BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
 fi
-
-swift build -c "$CONFIG" "${ARCH_FLAGS[@]}"
-BIN_DIR="$(swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --show-bin-path)"
 
 echo "▸ Generating SenseBar icons..."
 mkdir -p build
