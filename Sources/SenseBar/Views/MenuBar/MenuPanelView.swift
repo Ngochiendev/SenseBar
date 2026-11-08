@@ -14,6 +14,7 @@ enum PopoverMode: String, CaseIterable, Identifiable {
         }
     }
 
+    @MainActor
     func title(_ l10n: L10n) -> String {
         switch self {
         case .dynamicIsland:

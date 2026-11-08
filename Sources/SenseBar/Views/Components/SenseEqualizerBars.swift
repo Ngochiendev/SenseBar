@@ -4,6 +4,7 @@ import SwiftUI
 
 // MARK: - NotchDecorativeClock (30fps CADisplayLink stepping)
 
+@MainActor
 final class SenseDecorativeClock {
     static let rate: Float = 30
 
@@ -34,10 +35,11 @@ final class SenseDecorativeClock {
         link = nil
     }
 
-    deinit {
+    isolated deinit {
         link?.invalidate()
     }
 
+    @MainActor
     private final class Target: NSObject {
         weak var clock: SenseDecorativeClock?
         init(clock: SenseDecorativeClock) { self.clock = clock }

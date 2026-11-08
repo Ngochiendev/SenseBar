@@ -79,6 +79,7 @@ struct PermissionRow: View {
 
 // MARK: - Thẻ nổi hướng dẫn cấp quyền (PermissionGuideOverlay)
 
+@MainActor
 final class PermissionGuideOverlay {
     static let shared = PermissionGuideOverlay()
 
@@ -132,11 +133,13 @@ final class PermissionGuideOverlay {
         self.panel = panel
 
         pollTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            PermissionManager.shared.refreshStatus()
-            if PermissionManager.shared.isGranted(kind) {
-                self?.pollTimer?.invalidate()
-                self?.pollTimer = nil
-                self?.scheduleDismiss(after: 1.4)
+            MainActor.assumeIsolated {
+                PermissionManager.shared.refreshStatus()
+                if PermissionManager.shared.isGranted(kind) {
+                    self?.pollTimer?.invalidate()
+                    self?.pollTimer = nil
+                    self?.scheduleDismiss(after: 1.4)
+                }
             }
         }
     }
@@ -151,7 +154,9 @@ final class PermissionGuideOverlay {
             ctx.duration = 0.18
             panel.animator().alphaValue = 0
         }, completionHandler: {
-            panel.orderOut(nil)
+            MainActor.assumeIsolated {
+                panel.orderOut(nil)
+            }
         })
         self.panel = nil
     }
@@ -159,7 +164,9 @@ final class PermissionGuideOverlay {
     private func scheduleDismiss(after seconds: TimeInterval) {
         dismissTimer?.invalidate()
         dismissTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
-            self?.dismiss()
+            MainActor.assumeIsolated {
+                self?.dismiss()
+            }
         }
     }
 }

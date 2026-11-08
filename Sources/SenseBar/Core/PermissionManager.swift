@@ -9,6 +9,7 @@ enum PermissionKind: String, CaseIterable, Identifiable {
     var tccService: String { "Accessibility" }
 }
 
+@MainActor
 final class PermissionManager: ObservableObject {
     static let shared = PermissionManager()
 
@@ -24,11 +25,13 @@ final class PermissionManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refreshStatus()
+            MainActor.assumeIsolated {
+                self?.refreshStatus()
+            }
         }
     }
 
-    deinit {
+    isolated deinit {
         pollTimer?.invalidate()
         if let appActiveObserver {
             NotificationCenter.default.removeObserver(appActiveObserver)
@@ -47,7 +50,9 @@ final class PermissionManager: ObservableObject {
         refreshStatus()
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            self?.refreshStatus()
+            MainActor.assumeIsolated {
+                self?.refreshStatus()
+            }
         }
     }
 
@@ -68,7 +73,7 @@ final class PermissionManager: ObservableObject {
     }
 
     func requestAccessibility() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
         refreshStatus()
 

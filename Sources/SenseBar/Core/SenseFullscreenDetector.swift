@@ -69,6 +69,7 @@ enum SenseSpaceTopology {
 
 // MARK: - App Fullscreen Detection (YouTube in browser, VLC, Games, HTML5 fullscreen)
 
+@MainActor
 enum SenseAppFullscreen {
     struct WindowInfo: Equatable {
         let number: CGWindowID
@@ -83,7 +84,7 @@ enum SenseAppFullscreen {
         return window.insetBy(dx: -1, dy: -1).contains(display)
     }
 
-    private static nonisolated(unsafe) var confirmed = Set<CGWindowID>()
+    private static var confirmed = Set<CGWindowID>()
 
     static func coveredDisplays() -> Set<CGDirectDisplayID> {
         let ownPID = ProcessInfo.processInfo.processIdentifier
@@ -150,6 +151,7 @@ enum SenseAppFullscreen {
 
 // MARK: - SenseFullscreenDetector
 
+@MainActor
 public enum SenseFullscreenDetector {
     public static func isFullscreen(on displayID: CGDirectDisplayID) -> Bool {
         // 1. Native macOS fullscreen Space

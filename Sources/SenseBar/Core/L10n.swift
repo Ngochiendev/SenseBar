@@ -174,6 +174,7 @@ struct SenseStrings {
     )
 }
 
+@MainActor
 final class L10n: ObservableObject {
     static let shared = L10n()
 

@@ -31,6 +31,7 @@ struct NowPlayingTrack: Equatable {
     }
 }
 
+@MainActor
 final class NotchMusicService: ObservableObject {
     static let shared = NotchMusicService()
 
@@ -43,7 +44,7 @@ final class NotchMusicService: ObservableObject {
     private var outputPipe: Pipe?
     private var tickTimer: Timer?
     private var lastSampleDate = Date()
-    private var rawBuffer = Data()
+    private nonisolated(unsafe) var rawBuffer = Data()
     private let workerQueue = DispatchQueue(label: "com.ngochiendev.sensebar.music-service", qos: .utility)
 
     private init() {
@@ -99,11 +100,14 @@ final class NotchMusicService: ObservableObject {
                 handle.readabilityHandler = nil
                 return
             }
-            self?.appendOutput(data)
+            Task { @MainActor [weak self] in
+                self?.appendOutput(data)
+            }
         }
 
         proc.terminationHandler = { [weak self] _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
                 self?.process = nil
                 self?.start()
             }
@@ -178,16 +182,18 @@ final class NotchMusicService: ObservableObject {
 
     private func startElapsedTicker() {
         tickTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self, var current = self.track, current.isPlaying else { return }
-            let now = Date()
-            let delta = now.timeIntervalSince(self.lastSampleDate)
-            self.lastSampleDate = now
-            if current.duration > 0 {
-                current.elapsed = min(current.duration, current.elapsed + delta)
-            } else {
-                current.elapsed += delta
+            Task { @MainActor [weak self] in
+                guard let self, var current = self.track, current.isPlaying else { return }
+                let now = Date()
+                let delta = now.timeIntervalSince(self.lastSampleDate)
+                self.lastSampleDate = now
+                if current.duration > 0 {
+                    current.elapsed = min(current.duration, current.elapsed + delta)
+                } else {
+                    current.elapsed += delta
+                }
+                self.track = current
             }
-            self.track = current
         }
     }
 
@@ -198,7 +204,9 @@ final class NotchMusicService: ObservableObject {
             while let newline = self.rawBuffer.firstIndex(of: 0x0A) {
                 let lineData = self.rawBuffer.subdata(in: 0..<newline)
                 self.rawBuffer.removeSubrange(0...newline)
-                self.parseJSONLine(lineData)
+                Task { @MainActor [weak self] in
+                    self?.parseJSONLine(lineData)
+                }
             }
         }
     }

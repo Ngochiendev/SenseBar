@@ -11,6 +11,7 @@ struct AudioAppEntry: Identifiable, Equatable {
     var isMuted: Bool
 }
 
+@MainActor
 final class AudioStudioService: ObservableObject {
     static let shared = AudioStudioService()
 
@@ -49,15 +50,19 @@ final class AudioStudioService: ObservableObject {
 
         let nc = NSWorkspace.shared.notificationCenter
         let launchObs = nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.refreshRunningAudioApps()
+            MainActor.assumeIsolated {
+                self?.refreshRunningAudioApps()
+            }
         }
         let termObs = nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.refreshRunningAudioApps()
+            MainActor.assumeIsolated {
+                self?.refreshRunningAudioApps()
+            }
         }
         workspaceObservers = [launchObs, termObs]
     }
 
-    deinit {
+    isolated deinit {
         workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
     }
 

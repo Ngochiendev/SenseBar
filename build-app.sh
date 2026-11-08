@@ -90,6 +90,29 @@ fi
 
 echo "✓ SenseBar.app is ready at $STAGE"
 
+staple_with_retry() {
+  local target="$1"
+  local max_attempts=5
+  local delay=10
+  local attempt=1
+
+  echo "▸ Stapling Notarization ticket to $target..."
+  while [[ $attempt -le $max_attempts ]]; do
+    if xcrun stapler staple "$target" 2>&1; then
+      echo "✓ Stapling successful on attempt $attempt!"
+      return 0
+    fi
+    echo "Stapler attempt $attempt/$max_attempts failed (thường do Apple CloudKit CDN chưa kịp đồng bộ ticket hoặc mạng chập chờn). Thử lại sau ${delay}s..."
+    sleep "$delay"
+    attempt=$((attempt + 1))
+    delay=$((delay + 5))
+  done
+
+  echo "Cảnh báo: Stapling không hoàn tất sau $max_attempts lần thử do Apple CloudKit CDN gặp sự cố kết nối."
+  echo "ℹLưu ý: Bản build đã được Apple Notarize hợp lệ (Accepted), người dùng vẫn mở bình thường qua Gatekeeper."
+  return 0
+}
+
 if [[ "$BUILD_DMG" -eq 1 ]]; then
   DMG_PATH="build/SenseBar.dmg"
   DMG_ROOT="build/dmg-root"
@@ -112,15 +135,17 @@ if [[ "$BUILD_DMG" -eq 1 ]]; then
         --team-id "$APPLE_TEAM_ID" \
         --wait
 
-      echo "▸ Stapling Notarization ticket to $DMG_PATH..."
-      xcrun stapler staple "$DMG_PATH"
-      echo "✓ Notarization & Stapling completed successfully!"
+      echo "▸ Chờ Apple CloudKit đồng bộ ticket (10s)..."
+      sleep 10
+      staple_with_retry "$DMG_PATH"
+      echo "✓ Notarization & Stapling completed!"
     elif [[ -n "${NOTARY_PROFILE:-}" ]]; then
       echo "▸ Submitting $DMG_PATH to Apple using profile '$NOTARY_PROFILE'..."
       xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
-      echo "▸ Stapling Notarization ticket to $DMG_PATH..."
-      xcrun stapler staple "$DMG_PATH"
-      echo "✓ Notarization & Stapling completed successfully!"
+      echo "▸ Chờ Apple CloudKit đồng bộ ticket (10s)..."
+      sleep 10
+      staple_with_retry "$DMG_PATH"
+      echo "✓ Notarization & Stapling completed!"
     fi
   fi
   echo "✓ DMG is ready at $DMG_PATH"

@@ -21,5 +21,5 @@ let package = Package(
             path: "Sources/NowPlayingBridge"
         )
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v6]
 )

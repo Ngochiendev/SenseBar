@@ -17,6 +17,7 @@ final class SenseNotchPanel: NSPanel {
     override func accessibilitySubrole() -> NSAccessibility.Subrole? { .unknown }
 }
 
+@MainActor
 final class NotchDynamicIslandController: ObservableObject {
     static let shared = NotchDynamicIslandController()
 
@@ -49,32 +50,40 @@ final class NotchDynamicIslandController: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.syncAllDisplays()
+            MainActor.assumeIsolated {
+                self?.syncAllDisplays()
+            }
         }
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.syncVisibility()
+            MainActor.assumeIsolated {
+                self?.syncVisibility()
+            }
         }
         spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.syncFullscreenState()
+            MainActor.assumeIsolated {
+                self?.syncFullscreenState()
+            }
         }
         appActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.syncFullscreenState()
+            MainActor.assumeIsolated {
+                self?.syncFullscreenState()
+            }
         }
     }
 
-    deinit {
+    isolated deinit {
         fullscreenTimer?.invalidate()
         fullscreenTimer = nil
         if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
@@ -318,7 +327,9 @@ final class NotchDynamicIslandController: ObservableObject {
         }
         guard fullscreenTimer == nil else { return }
         let timer = Timer(timeInterval: 0.6, repeats: true) { [weak self] _ in
-            self?.syncFullscreenState()
+            MainActor.assumeIsolated {
+                self?.syncFullscreenState()
+            }
         }
         timer.tolerance = 0.2
         fullscreenTimer = timer

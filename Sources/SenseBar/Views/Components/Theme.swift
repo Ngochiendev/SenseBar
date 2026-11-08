@@ -143,6 +143,7 @@ enum BrandIconResources {
     }
 
     /// Gán biểu tượng chính thức của SenseBar cho toàn ứng dụng (Dock, Cmd+Tab, Cửa sổ)
+    @MainActor
     static func applyApplicationIcon() {
         NSApplication.shared.applicationIconImage = appIconImage()
     }
