@@ -27,17 +27,83 @@ enum Theme {
 
     /// Màu nhấn riêng cho từng biểu tượng danh mục
     static func iconColor(for symbol: String) -> Color {
-        switch symbol {
-        case "macbook", "sparkles":
-            return Color(red: 0.56, green: 0.36, blue: 0.98) // Tím Indigo Aurora
-        case "speaker.wave.2.fill", "speaker.wave.2", "waveform":
-            return Color(red: 0.08, green: 0.68, blue: 0.98) // Xanh Cyan Audio
-        case "fanblades.fill", "cpu", "chart.line.uptrend.xyaxis":
-            return Color(red: 0.12, green: 0.80, blue: 0.56) // Xanh Ngọc Lục Bảo SMC
-        case "accessibility", "key.horizontal.fill", "lock.shield.fill":
-            return Color(red: 0.98, green: 0.56, blue: 0.20) // Cam Amber Quyền Hệ Thống
-        default:
-            return Color.accentColor
+        let s = symbol.lowercased()
+        if s.contains("speaker") || s.contains("waveform") || s.contains("music") {
+            return Color(red: 0.00, green: 0.68, blue: 0.92) // Sonic Cyan
+        }
+        if s.contains("macbook") || s.contains("rectangle") || s.contains("sparkles") {
+            return Color(red: 0.46, green: 0.34, blue: 0.94) // Island Violet
+        }
+        return Color(red: 0.38, green: 0.44, blue: 0.92) // Studio Indigo
+    }
+}
+
+// MARK: - PanelSurface & Glass Card Modifiers (Dùng cho Menu Bar Popover)
+
+enum PanelSurface {
+    /// Chỉ bật hasFullSizeContent từ macOS 26 trở lên; trên macOS 14–15 giữ inset nguyên bản
+    /// của NSPopover để bo góc và mũi tên của Popover hiển thị sắc nét, không bị tràn viền.
+    static var popoverHostsFullSizeContent: Bool {
+        if #available(macOS 26.0, *) { return true }
+        return false
+    }
+
+    static func baseFill(for scheme: ColorScheme) -> Color {
+        scheme == .light ? Color.white.opacity(0.68) : Color.black.opacity(0.42)
+    }
+
+    static func cardFill(for scheme: ColorScheme) -> Color {
+        scheme == .light ? Color.white.opacity(0.45) : Color.white.opacity(0.075)
+    }
+
+    static func border(for scheme: ColorScheme) -> Color {
+        let raised = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        return scheme == .light
+            ? Color.black.opacity(raised ? 0.24 : 0.09)
+            : Color.white.opacity(raised ? 0.28 : 0.11)
+    }
+}
+
+extension View {
+    func panelCard(padded: Bool = true) -> some View {
+        modifier(PanelCardModifier(padded: padded))
+    }
+
+    func panelGlassSurface() -> some View {
+        frame(maxHeight: .infinity)
+            .background(PanelGlassSurface())
+    }
+}
+
+private struct PanelCardModifier: ViewModifier {
+    var padded = true
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .padding(padded ? 12 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(PanelSurface.cardFill(for: colorScheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .strokeBorder(PanelSurface.border(for: colorScheme), lineWidth: 0.85)
+            )
+    }
+}
+
+private struct PanelGlassSurface: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        if PanelSurface.popoverHostsFullSizeContent {
+            Rectangle()
+                .fill(.regularMaterial)
+                .overlay(Rectangle().fill(PanelSurface.baseFill(for: colorScheme)))
+                .ignoresSafeArea()
+        } else {
+            Color.clear
         }
     }
 }

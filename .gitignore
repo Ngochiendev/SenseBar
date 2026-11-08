@@ -21,3 +21,12 @@ docs/
 .codegraph
 s-src/
 test/
+# Security & Apple Certificates
+*.p12
+*.p8
+*.cer
+*.certSigningRequest
+*.keychain
+*.keychain-db
+access.p12
+cert.p12

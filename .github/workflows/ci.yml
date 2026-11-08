@@ -1,0 +1,35 @@
+name: CI (Build & Test)
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+  push:
+    branches:
+      - dev
+
+jobs:
+  build-and-test:
+    name: Build Universal & Run Selftest
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build SenseBar Universal (arm64 + x86_64)
+        shell: zsh {0}
+        run: |
+          chmod +x build-app.sh
+          ./build-app.sh
+
+      - name: Chạy kiểm thử tự động (--selftest)
+        shell: zsh {0}
+        run: |
+          ./build/SenseBar.app/Contents/MacOS/SenseBar --selftest
+
+      - name: Kiểm tra Universal Binary (arm64 + x86_64)
+        shell: zsh {0}
+        run: |
+          lipo -info build/SenseBar.app/Contents/MacOS/SenseBar
+          lipo -info build/SenseBar.app/Contents/Frameworks/libSenseBarNowPlaying.dylib

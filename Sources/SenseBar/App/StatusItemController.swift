@@ -1,13 +1,46 @@
 import AppKit
+import SwiftUI
 
 final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
+    private let popover = NSPopover()
     private let onOpenWelcome: () -> Void
+    private let onOpenSettings: (SettingsTab) -> Void
 
-    init(onOpenWelcome: @escaping () -> Void) {
+    init(
+        onOpenWelcome: @escaping () -> Void,
+        onOpenSettings: @escaping (SettingsTab) -> Void
+    ) {
         self.onOpenWelcome = onOpenWelcome
+        self.onOpenSettings = onOpenSettings
         super.init()
+        setupPopover()
         setupStatusItem()
+    }
+
+    private func setupPopover() {
+        popover.behavior = .transient
+        popover.animates = true
+        popover.hasFullSizeContent = PanelSurface.popoverHostsFullSizeContent
+
+        let panelView = MenuPanelView(
+            onOpenSettings: { [weak self] in
+                self?.closePopover()
+                self?.onOpenSettings(.general)
+            },
+            onOpenPermissions: { [weak self] in
+                self?.closePopover()
+                self?.onOpenSettings(.permissions)
+            },
+            onQuit: {
+                NSApplication.shared.terminate(nil)
+            }
+        )
+        let host = NSHostingController(rootView: panelView)
+        if #available(macOS 13.0, *) {
+            host.sizingOptions = .preferredContentSize
+        }
+        popover.contentViewController = host
     }
 
     private func setupStatusItem() {
@@ -29,16 +62,57 @@ final class StatusItemController: NSObject {
     @objc private func handleStatusBarClick(_ sender: NSStatusBarButton) {
         let event = NSApp.currentEvent
         if event?.type == .rightMouseUp {
-            showMenu()
+            showContextMenu()
         } else {
-            onOpenWelcome()
+            togglePopover()
         }
     }
 
-    private func showMenu() {
+    func togglePopover() {
+        if popover.isShown {
+            closePopover()
+        } else {
+            showPopover()
+        }
+    }
+
+    func showPopover() {
+        guard let button = statusItem?.button else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+    }
+
+    func closePopover() {
+        if popover.isShown {
+            popover.performClose(nil)
+        }
+    }
+
+    private func showContextMenu() {
         guard let statusItem else { return }
+        closePopover()
+
         let s = L10n.shared.s
         let menu = NSMenu()
+
+        let panelItem = NSMenuItem(
+            title: s.menuOpenPanel,
+            action: #selector(openPanelAction),
+            keyEquivalent: ""
+        )
+        panelItem.target = self
+        menu.addItem(panelItem)
+
+        menu.addItem(.separator())
+
+        let settingsItem = NSMenuItem(
+            title: s.menuSettings,
+            action: #selector(openSettingsAction),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         let welcomeItem = NSMenuItem(
             title: s.menuShowWelcome,
@@ -47,6 +121,14 @@ final class StatusItemController: NSObject {
         )
         welcomeItem.target = self
         menu.addItem(welcomeItem)
+
+        let aboutItem = NSMenuItem(
+            title: s.menuAbout,
+            action: #selector(openAboutAction),
+            keyEquivalent: ""
+        )
+        aboutItem.target = self
+        menu.addItem(aboutItem)
 
         menu.addItem(.separator())
 
@@ -63,12 +145,23 @@ final class StatusItemController: NSObject {
         statusItem.menu = nil
     }
 
+    @objc private func openPanelAction() {
+        showPopover()
+    }
+
+    @objc private func openSettingsAction() {
+        onOpenSettings(.general)
+    }
+
     @objc private func openWelcomeAction() {
         onOpenWelcome()
+    }
+
+    @objc private func openAboutAction() {
+        onOpenSettings(.about)
     }
 
     @objc private func quitAction() {
         NSApplication.shared.terminate(nil)
     }
 }
-

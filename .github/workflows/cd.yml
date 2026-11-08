@@ -1,0 +1,141 @@
+name: CD (Release & DMG)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build Signed DMG & Release
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Đọc Version từ Info.plist & Xác định Tag
+        id: meta
+        shell: zsh {0}
+        run: |
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+          TAG="v${VERSION}"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            TAG_EXISTS="true"
+          else
+            TAG_EXISTS="false"
+          fi
+
+          if [[ "$TAG_EXISTS" == "false" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SHOULD_RELEASE="true"
+          else
+            SHOULD_RELEASE="false"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "should_release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "▸ Target Version: $VERSION -> Tag: $TAG (Release: $SHOULD_RELEASE)"
+
+      - name: Nhập chứng chỉ Apple Developer ID
+        if: ${{ env.APPLE_CERTIFICATE_BASE64 != '' }}
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD || 'sensebar-temp-keychain' }}
+        shell: zsh {0}
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo -n "$APPLE_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-keychain-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+          rm -f "$CERTIFICATE_PATH"
+
+      - name: Build SenseBar Universal (arm64 + x86_64) & Signed DMG
+        env:
+          SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY || '-' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: zsh {0}
+        run: |
+          chmod +x build-app.sh
+          ./build-app.sh --dmg
+
+      - name: Xóa Keychain tạm
+        if: always()
+        shell: zsh {0}
+        run: |
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/build_certificate.p12" "$RUNNER_TEMP/app-signing.keychain-db"
+
+      - name: Chạy kiểm thử tự động (--selftest)
+        shell: zsh {0}
+        run: |
+          ./build/SenseBar.app/Contents/MacOS/SenseBar --selftest
+          lipo -info build/SenseBar.app/Contents/MacOS/SenseBar
+          lipo -info build/SenseBar.app/Contents/Frameworks/libSenseBarNowPlaying.dylib
+
+      - name: Đóng gói file phát hành (DMG, ZIP & SHA256)
+        shell: zsh {0}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          DMG_NAME="SenseBar-${TAG}-macOS-Universal.dmg"
+          ZIP_NAME="SenseBar-${TAG}-macOS-Universal.zip"
+
+          cp build/SenseBar.dmg "build/${DMG_NAME}"
+          ditto -c -k --sequesterRsrc --keepParent build/SenseBar.app "build/${ZIP_NAME}"
+
+          cd build
+          shasum -a 256 "${DMG_NAME}" "${ZIP_NAME}" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Tạo Release Notes tự động từ danh sách Commit
+        if: steps.meta.outputs.should_release == 'true'
+        shell: zsh {0}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${TAG}$" | head -n 1 || true)
+
+          if [[ -n "$PREV_TAG" ]]; then
+            RANGE="${PREV_TAG}..HEAD"
+            HEADER="## Thay đổi trong phiên bản ${TAG} (so với ${PREV_TAG})"
+          else
+            RANGE="HEAD"
+            HEADER="## Thay đổi trong phiên bản ${TAG}"
+          fi
+
+          {
+            echo "$HEADER"
+            echo ""
+            git log $RANGE --no-merges --pretty=format:"### %s (\`%h\`)%n%b"
+          } > build/RELEASE_NOTES.md
+
+          cat build/RELEASE_NOTES.md
+
+      - name: Tự động gắn Tag ${{ steps.meta.outputs.tag }} & Phát hành GitHub Release
+        if: steps.meta.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: "SenseBar ${{ steps.meta.outputs.tag }}"
+          body_path: build/RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          files: |
+            build/SenseBar-${{ steps.meta.outputs.tag }}-macOS-Universal.dmg
+            build/SenseBar-${{ steps.meta.outputs.tag }}-macOS-Universal.zip
+            build/SHA256SUMS.txt

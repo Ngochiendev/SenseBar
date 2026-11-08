@@ -6,7 +6,9 @@ if CommandLine.arguments.contains("--selftest") {
     assert(menuIcon.isTemplate, "MenuBarIcon must be a template image")
     assert(menuIcon.size == NSSize(width: 26, height: 20), "MenuBarIcon size must be 26x20")
     assert(L10n.shared.language == .vi || L10n.shared.language == .en, "Supported language check")
-    assert(SensePillar.allCases.count == 3, "SenseBar must have exactly 3 core pillars")
+    assert(SensePillar.allCases.count == 2, "SenseBar must have exactly 2 core pillars")
+    assert(PopoverMode.allCases.count == 2, "Menu Bar Popover must have Dynamic Island & Audio tabs")
+    assert(SettingsTab.allCases.count == 3, "Settings window must have General, Permissions, and About tabs")
     print("SELFTEST OK")
     exit(0)
 }

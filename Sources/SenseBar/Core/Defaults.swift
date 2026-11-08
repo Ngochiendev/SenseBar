@@ -1,48 +1,97 @@
 import Foundation
+import ServiceManagement
 
 enum DefaultsKey {
     static let language = "sensebar.language"
     static let hasOnboarded = "sensebar.hasOnboarded"
     static let onboardingStep = "sensebar.onboardingStep"
+    static let launchAtLogin = "sensebar.launchAtLogin"
+    static let selectedPopoverTab = "sensebar.popoverTab"
+    static let selectedSettingsTab = "sensebar.settingsTab"
 
-    // 3 Trụ cột cốt lõi của SenseBar
+    // 2 tính năng chính của SenseBar
     static let pillarDynamicIslandEnabled = "sensebar.pillar.dynamicIsland"
     static let pillarAudioStudioEnabled = "sensebar.pillar.audioStudio"
-    static let pillarHardwareTelemetryEnabled = "sensebar.pillar.hardwareTelemetry"
+
+    // Tùy chỉnh Dynamic Island
+    static let notchStyle = "sensebar.notch.style" // "notch" hoặc "pill"
+    static let notchExpandOnHover = "sensebar.notch.expandOnHover"
+    static let notchShowVisualizer = "sensebar.notch.showVisualizer"
+    static let notchHideInFullscreen = "sensebar.notch.hideInFullscreen"
+    static let notchDisplayTarget = "sensebar.notch.displayTarget" // automatic, builtIn, main, pointer, all
+    static let notchExpandAllDisplays = "sensebar.notch.expandAllDisplays"
+    static let notchCapsuleFitWidth = "sensebar.notch.capsuleFitWidth"
+    static let notchCapsuleFitHeight = "sensebar.notch.capsuleFitHeight"
+    static let notchCapsuleFitDrop = "sensebar.notch.capsuleFitDrop"
+
+    // Liquid Glass (macOS 26+)
+    static let liquidGlassEnabled = "sensebar.liquidGlassEnabled"
+    static let liquidGlassIslandEnabled = "sensebar.liquidGlassIslandEnabled"
+}
+
+enum DefaultsResetter {
+    static func resetAllToDefaults() {
+        let defaults = UserDefaults.standard
+        defaults.set("automatic", forKey: DefaultsKey.notchDisplayTarget)
+        defaults.set(false, forKey: DefaultsKey.notchExpandAllDisplays)
+        defaults.set("notch", forKey: DefaultsKey.notchStyle)
+        defaults.set(false, forKey: DefaultsKey.notchHideInFullscreen)
+        defaults.set(0.0, forKey: DefaultsKey.notchCapsuleFitWidth)
+        defaults.set(0.0, forKey: DefaultsKey.notchCapsuleFitHeight)
+        defaults.set(0.0, forKey: DefaultsKey.notchCapsuleFitDrop)
+        defaults.set(true, forKey: DefaultsKey.notchExpandOnHover)
+        defaults.set(true, forKey: DefaultsKey.notchShowVisualizer)
+        defaults.set(true, forKey: DefaultsKey.liquidGlassEnabled)
+        defaults.set(true, forKey: DefaultsKey.liquidGlassIslandEnabled)
+        defaults.set(true, forKey: DefaultsKey.pillarDynamicIslandEnabled)
+        defaults.set(true, forKey: DefaultsKey.pillarAudioStudioEnabled)
+        defaults.synchronize()
+    }
+}
+
+enum LaunchAtLoginManager {
+    static var isEnabled: Bool {
+        if #available(macOS 13.0, *) {
+            return SMAppService.mainApp.status == .enabled
+        }
+        return UserDefaults.standard.bool(forKey: DefaultsKey.launchAtLogin)
+    }
+
+    static func setEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: DefaultsKey.launchAtLogin)
+        if #available(macOS 13.0, *) {
+            do {
+                if enabled {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                // Khi chạy bản debug ngoài /Applications, vẫn lưu trạng thái vào UserDefaults
+            }
+        }
+    }
 }
 
 enum SensePillar: String, CaseIterable, Identifiable {
     case dynamicIsland
     case audioStudio
-    case hardwareTelemetry
 
     var id: String { rawValue }
 
     var defaultsKey: String {
         switch self {
         case .dynamicIsland: return DefaultsKey.pillarDynamicIslandEnabled
-        case .audioStudio: return DefaultsKey.pillarAudioStudioEnabled
-        case .hardwareTelemetry: return DefaultsKey.pillarHardwareTelemetryEnabled
+        case .audioStudio:   return DefaultsKey.pillarAudioStudioEnabled
         }
     }
 
-    var icon: String {
-        switch self {
-        case .dynamicIsland: return "macbook"
-        case .audioStudio: return "speaker.wave.2.fill"
-        case .hardwareTelemetry: return "fanblades.fill"
-        }
-    }
-
-    func isEnabled(in defaults: UserDefaults = .standard) -> Bool {
-        if defaults.object(forKey: defaultsKey) == nil {
-            return true
-        }
+    func isEnabled(_ defaults: UserDefaults = .standard) -> Bool {
+        if defaults.object(forKey: defaultsKey) == nil { return true }
         return defaults.bool(forKey: defaultsKey)
     }
 
-    func setEnabled(_ enabled: Bool, in defaults: UserDefaults = .standard) {
+    func setEnabled(_ enabled: Bool, defaults: UserDefaults = .standard) {
         defaults.set(enabled, forKey: defaultsKey)
     }
 }
-

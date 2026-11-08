@@ -1,6 +1,4 @@
-import ApplicationServices
 import AppKit
-import CoreGraphics
 import SwiftUI
 
 enum OnboardingStep: Int, CaseIterable {
@@ -17,7 +15,6 @@ struct WelcomeOnboardingView: View {
     @AppStorage(DefaultsKey.onboardingStep) private var stepIndex: Int = 0
     @AppStorage(DefaultsKey.pillarDynamicIslandEnabled) private var dynamicIslandEnabled: Bool = true
     @AppStorage(DefaultsKey.pillarAudioStudioEnabled) private var audioStudioEnabled: Bool = true
-    @AppStorage(DefaultsKey.pillarHardwareTelemetryEnabled) private var hardwareTelemetryEnabled: Bool = true
 
     private var currentStep: OnboardingStep {
         OnboardingStep(rawValue: min(max(0, stepIndex), OnboardingStep.allCases.count - 1)) ?? .welcome
@@ -35,7 +32,7 @@ struct WelcomeOnboardingView: View {
 
             navigationFooter
         }
-        .frame(width: 560, height: 640)
+        .frame(width: 560, height: 600)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -47,16 +44,14 @@ struct WelcomeOnboardingView: View {
         case .pillars:
             PillarsSelectionStep(
                 dynamicIslandEnabled: $dynamicIslandEnabled,
-                audioStudioEnabled: $audioStudioEnabled,
-                hardwareTelemetryEnabled: $hardwareTelemetryEnabled
+                audioStudioEnabled: $audioStudioEnabled
             )
         case .permissions:
             PermissionsSetupStep()
         case .done:
             DoneReadyStep(
                 dynamicIslandEnabled: dynamicIslandEnabled,
-                audioStudioEnabled: audioStudioEnabled,
-                hardwareTelemetryEnabled: hardwareTelemetryEnabled
+                audioStudioEnabled: audioStudioEnabled
             )
         }
     }
@@ -87,7 +82,6 @@ struct WelcomeOnboardingView: View {
 
             Spacer()
 
-            // Chấm tiến trình Aurora
             HStack(spacing: 7) {
                 ForEach(OnboardingStep.allCases, id: \.rawValue) { step in
                     let isActive = step.rawValue == stepIndex
@@ -176,14 +170,9 @@ private struct WelcomeHeroStep: View {
                     title: l10n.s.pillar2Title,
                     subtitle: l10n.s.pillar2Subtitle
                 )
-                pillarPreviewRow(
-                    icon: "fanblades.fill",
-                    title: l10n.s.pillar3Title,
-                    subtitle: l10n.s.pillar3Subtitle
-                )
             }
             .padding(.horizontal, 26)
-            .padding(.vertical, 20)
+            .padding(.vertical, 24)
         }
     }
 
@@ -219,7 +208,7 @@ private struct WelcomeHeroStep: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(12)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
@@ -232,21 +221,19 @@ private struct WelcomeHeroStep: View {
     }
 }
 
-// MARK: - Bước 2: Chọn 3 Trụ cột cốt lõi (3 Core Pillars)
+// MARK: - Bước 2: Chọn 2 Trụ cột cốt lõi
 
 private struct PillarsSelectionStep: View {
     @ObservedObject private var l10n = L10n.shared
     @Binding var dynamicIslandEnabled: Bool
     @Binding var audioStudioEnabled: Bool
-    @Binding var hardwareTelemetryEnabled: Bool
 
     private var activeCount: Int {
-        [dynamicIslandEnabled, audioStudioEnabled, hardwareTelemetryEnabled].filter { $0 }.count
+        [dynamicIslandEnabled, audioStudioEnabled].filter { $0 }.count
     }
 
     var body: some View {
         VStack(spacing: 16) {
-            // Header gắn trực tiếp Logo Icon SenseBar
             VStack(spacing: 6) {
                 BrandBadge(size: 62)
                     .padding(.top, 22)
@@ -274,7 +261,7 @@ private struct PillarsSelectionStep: View {
                     .padding(.top, 2)
             }
 
-            VStack(spacing: 11) {
+            VStack(spacing: 12) {
                 pillarCard(
                     icon: "macbook",
                     title: l10n.s.pillar1Title,
@@ -289,14 +276,6 @@ private struct PillarsSelectionStep: View {
                     subtitle: l10n.s.pillar2Subtitle,
                     tags: l10n.s.pillar2Tags,
                     isOn: $audioStudioEnabled
-                )
-
-                pillarCard(
-                    icon: "fanblades.fill",
-                    title: l10n.s.pillar3Title,
-                    subtitle: l10n.s.pillar3Subtitle,
-                    tags: l10n.s.pillar3Tags,
-                    isOn: $hardwareTelemetryEnabled
                 )
             }
             .padding(.horizontal, 26)
@@ -374,7 +353,7 @@ private struct PillarsSelectionStep: View {
                     .padding(.top, 2)
                 }
             }
-            .padding(13)
+            .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(active ? accent.opacity(0.07) : Color.primary.opacity(0.03))
@@ -392,20 +371,17 @@ private struct PillarsSelectionStep: View {
     }
 }
 
-// MARK: - Bước 3: Cấp quyền hệ thống (Permissions)
+// MARK: - Bước 3: Cấp quyền Trợ năng (Accessibility)
 
 private struct PermissionsSetupStep: View {
     @ObservedObject private var l10n = L10n.shared
-    @State private var accessibilityGranted = AXIsProcessTrusted()
-    @State private var screenCaptureGranted = CGPreflightScreenCaptureAccess()
-
-    private let timer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+    @ObservedObject private var permissions = PermissionManager.shared
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 16) {
             VStack(spacing: 6) {
                 BrandBadge(size: 62)
-                    .padding(.top, 24)
+                    .padding(.top, 22)
 
                 Text(AppInfo.name)
                     .font(.system(size: 11, weight: .bold))
@@ -422,112 +398,22 @@ private struct PermissionsSetupStep: View {
                     .padding(.horizontal, 44)
             }
 
-            VStack(spacing: 14) {
-                permissionCard(
-                    icon: "accessibility",
-                    title: l10n.s.permAccessibilityTitle,
-                    description: l10n.s.permAccessibilityDesc,
-                    isGranted: accessibilityGranted
-                ) {
-                    let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-                    _ = AXIsProcessTrustedWithOptions(options)
-                    accessibilityGranted = AXIsProcessTrusted()
+            PermissionSectionCard(compact: false)
+                .padding(.horizontal, 26)
+                .onAppear {
+                    permissions.startMonitoring()
                 }
-
-                permissionCard(
-                    icon: "waveform",
-                    title: l10n.s.permAudioScreenTitle,
-                    description: l10n.s.permAudioScreenDesc,
-                    isGranted: screenCaptureGranted
-                ) {
-                    _ = CGRequestScreenCaptureAccess()
-                    screenCaptureGranted = CGPreflightScreenCaptureAccess()
+                .onDisappear {
+                    permissions.stopMonitoring()
                 }
-            }
-            .padding(.horizontal, 26)
 
             Text(l10n.s.permNote)
                 .font(.system(size: 11.5))
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 48)
-                .padding(.top, 4)
+                .padding(.bottom, 12)
         }
-        .onReceive(timer) { _ in
-            accessibilityGranted = AXIsProcessTrusted()
-            screenCaptureGranted = CGPreflightScreenCaptureAccess()
-        }
-    }
-
-    private func permissionCard(
-        icon: String,
-        title: String,
-        description: String,
-        isGranted: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        let accent = Theme.iconColor(for: icon)
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(accent.opacity(0.16))
-                        .frame(width: 38, height: 38)
-                    Image(systemName: icon)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(accent)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(title)
-                            .font(.system(size: 14, weight: .bold))
-
-                        Spacer()
-
-                        HStack(spacing: 4) {
-                            Image(systemName: isGranted ? "checkmark.seal.fill" : "clock.badge.exclamationmark")
-                                .font(.system(size: 11, weight: .bold))
-                            Text(isGranted ? l10n.s.permGrantedBadge : l10n.s.permRequiredBadge)
-                                .font(.system(size: 10.5, weight: .bold))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(isGranted ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
-                        )
-                        .foregroundStyle(isGranted ? Color.green : Color.orange)
-                    }
-
-                    Text(description)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            if !isGranted {
-                HStack {
-                    Spacer()
-                    Button(l10n.s.permGrantButton, action: action)
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                }
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.primary.opacity(0.035))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(
-                    isGranted ? Color.green.opacity(0.35) : Color.primary.opacity(0.08),
-                    lineWidth: 0.9
-                )
-        )
     }
 }
 
@@ -537,7 +423,6 @@ private struct DoneReadyStep: View {
     @ObservedObject private var l10n = L10n.shared
     let dynamicIslandEnabled: Bool
     let audioStudioEnabled: Bool
-    let hardwareTelemetryEnabled: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -572,9 +457,8 @@ private struct DoneReadyStep: View {
                         .foregroundStyle(.secondary)
 
                     HStack(spacing: 10) {
-                        activePillarBadge(icon: "macbook", title: "Dynamic Island", active: dynamicIslandEnabled)
-                        activePillarBadge(icon: "speaker.wave.2.fill", title: "Âm thanh", active: audioStudioEnabled)
-                        activePillarBadge(icon: "fanblades.fill", title: "Phần cứng & Quạt", active: hardwareTelemetryEnabled)
+                        activePillarBadge(icon: "macbook", title: "Tai thỏ & Dynamic Island", active: dynamicIslandEnabled)
+                        activePillarBadge(icon: "speaker.wave.2.fill", title: "Loa & Ứng dụng", active: audioStudioEnabled)
                     }
                 }
                 .padding(16)
