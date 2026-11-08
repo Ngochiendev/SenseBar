@@ -163,6 +163,7 @@ struct SettingsWindowView: View {
                     ))
                     .labelsHidden()
                     .toggleStyle(.switch)
+                    .controlSize(.mini)
                 }
             }
 
@@ -206,6 +207,7 @@ struct SettingsWindowView: View {
                         Toggle("", isOn: $hideInFullscreen)
                             .labelsHidden()
                             .toggleStyle(.switch)
+                            .controlSize(.mini)
                     }
 
                     HStack {
@@ -229,6 +231,7 @@ struct SettingsWindowView: View {
                         Toggle("", isOn: $expandAllDisplays)
                             .labelsHidden()
                             .toggleStyle(.switch)
+                            .controlSize(.mini)
                     }
 
                     // Danh sách màn hình hiển thị - SenseBar Inset Cards
@@ -344,6 +347,7 @@ struct SettingsWindowView: View {
                         Toggle("", isOn: $liquidGlassOtherWindows)
                             .labelsHidden()
                             .toggleStyle(.switch)
+                            .controlSize(.mini)
                     }
 
                     HStack {
@@ -353,6 +357,7 @@ struct SettingsWindowView: View {
                         Toggle("", isOn: $liquidGlassIsland)
                             .labelsHidden()
                             .toggleStyle(.switch)
+                            .controlSize(.mini)
                     }
                 }
             }
@@ -712,6 +717,7 @@ struct SettingsWindowView: View {
             Toggle("", isOn: isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
+                .controlSize(.mini)
         }
     }
 

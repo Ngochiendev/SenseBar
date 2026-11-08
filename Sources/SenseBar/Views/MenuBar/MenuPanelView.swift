@@ -812,7 +812,7 @@ struct MenuPanelView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 11, weight: .semibold))
-                    Text(l10n.string(vi: "Mở Cài đặt...", en: "Settings..."))
+                    Text(l10n.string(vi: "Cài đặt", en: "Settings"))
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundStyle(.secondary)

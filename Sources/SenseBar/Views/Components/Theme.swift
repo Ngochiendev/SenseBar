@@ -49,18 +49,18 @@ enum PanelSurface {
     }
 
     static func baseFill(for scheme: ColorScheme) -> Color {
-        scheme == .light ? Color.white.opacity(0.38) : Color.black.opacity(0.36)
+        scheme == .light ? Color.white.opacity(0.68) : Color.black.opacity(0.42)
     }
 
     static func cardFill(for scheme: ColorScheme) -> Color {
-        scheme == .light ? Color.white.opacity(0.58) : Color.white.opacity(0.08)
+        scheme == .light ? Color.white.opacity(0.45) : Color.white.opacity(0.075)
     }
 
     static func border(for scheme: ColorScheme) -> Color {
         let raised = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
         return scheme == .light
-            ? Color.black.opacity(raised ? 0.22 : 0.07)
-            : Color.white.opacity(raised ? 0.28 : 0.12)
+            ? Color.black.opacity(raised ? 0.24 : 0.09)
+            : Color.white.opacity(raised ? 0.28 : 0.11)
     }
 }
 
@@ -95,19 +95,16 @@ private struct PanelCardModifier: ViewModifier {
 
 private struct PanelGlassSurface: View {
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage(DefaultsKey.liquidGlassEnabled) private var liquidGlassEnabled: Bool = true
 
     var body: some View {
-        ZStack {
-            if liquidGlassEnabled {
-                NotchTranslucentMaterial(cornerRadius: 14)
-            } else {
-                Rectangle().fill(.regularMaterial)
-            }
+        if PanelSurface.popoverHostsFullSizeContent {
             Rectangle()
-                .fill(PanelSurface.baseFill(for: colorScheme))
+                .fill(.regularMaterial)
+                .overlay(Rectangle().fill(PanelSurface.baseFill(for: colorScheme)))
+                .ignoresSafeArea()
+        } else {
+            Color.clear
         }
-        .ignoresSafeArea()
     }
 }
 
