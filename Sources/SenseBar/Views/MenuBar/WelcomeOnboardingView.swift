@@ -127,7 +127,7 @@ struct WelcomeOnboardingView: View {
     }
 }
 
-// MARK: - Bước 1: Màn hình Chào mừng (Welcome Hero)
+// MARK: - Màn hình Chào mừng (Welcome Hero)
 
 private struct WelcomeHeroStep: View {
     @ObservedObject private var l10n = L10n.shared
@@ -221,7 +221,7 @@ private struct WelcomeHeroStep: View {
     }
 }
 
-// MARK: - Bước 2: Chọn 2 Trụ cột cốt lõi
+// MARK: - Chọn tính năng chính (Pillars Selection)
 
 private struct PillarsSelectionStep: View {
     @ObservedObject private var l10n = L10n.shared
@@ -371,7 +371,7 @@ private struct PillarsSelectionStep: View {
     }
 }
 
-// MARK: - Bước 3: Cấp quyền Trợ năng (Accessibility)
+// MARK: - Cấp quyền Trợ năng (Accessibility)
 
 private struct PermissionsSetupStep: View {
     @ObservedObject private var l10n = L10n.shared
@@ -417,7 +417,7 @@ private struct PermissionsSetupStep: View {
     }
 }
 
-// MARK: - Bước 4: Hoàn tất (Done & Ready)
+// MARK: - Hoàn tất thiết lập (Done & Ready)
 
 private struct DoneReadyStep: View {
     @ObservedObject private var l10n = L10n.shared

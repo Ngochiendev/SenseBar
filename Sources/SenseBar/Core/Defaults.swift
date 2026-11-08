@@ -7,7 +7,6 @@ enum DefaultsKey {
     static let onboardingStep = "sensebar.onboardingStep"
     static let launchAtLogin = "sensebar.launchAtLogin"
     static let selectedPopoverTab = "sensebar.popoverTab"
-    static let selectedSettingsTab = "sensebar.settingsTab"
 
     // 2 tính năng chính của SenseBar
     static let pillarDynamicIslandEnabled = "sensebar.pillar.dynamicIsland"
@@ -27,26 +26,6 @@ enum DefaultsKey {
     // Liquid Glass (macOS 26+)
     static let liquidGlassEnabled = "sensebar.liquidGlassEnabled"
     static let liquidGlassIslandEnabled = "sensebar.liquidGlassIslandEnabled"
-}
-
-enum DefaultsResetter {
-    static func resetAllToDefaults() {
-        let defaults = UserDefaults.standard
-        defaults.set("automatic", forKey: DefaultsKey.notchDisplayTarget)
-        defaults.set(false, forKey: DefaultsKey.notchExpandAllDisplays)
-        defaults.set("notch", forKey: DefaultsKey.notchStyle)
-        defaults.set(false, forKey: DefaultsKey.notchHideInFullscreen)
-        defaults.set(0.0, forKey: DefaultsKey.notchCapsuleFitWidth)
-        defaults.set(0.0, forKey: DefaultsKey.notchCapsuleFitHeight)
-        defaults.set(0.0, forKey: DefaultsKey.notchCapsuleFitDrop)
-        defaults.set(true, forKey: DefaultsKey.notchExpandOnHover)
-        defaults.set(true, forKey: DefaultsKey.notchShowVisualizer)
-        defaults.set(true, forKey: DefaultsKey.liquidGlassEnabled)
-        defaults.set(true, forKey: DefaultsKey.liquidGlassIslandEnabled)
-        defaults.set(true, forKey: DefaultsKey.pillarDynamicIslandEnabled)
-        defaults.set(true, forKey: DefaultsKey.pillarAudioStudioEnabled)
-        defaults.synchronize()
-    }
 }
 
 enum LaunchAtLoginManager {

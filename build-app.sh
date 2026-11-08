@@ -64,6 +64,7 @@ cp "$BIN_DIR/libSenseBarNowPlaying.dylib" "$STAGE/Contents/Frameworks/libSenseBa
 cp "$BIN_DIR/libSenseBarNowPlaying.dylib" "build/libSenseBarNowPlaying.dylib"
 cp build/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
 cp build/MenuBarIcon.png build/MenuBarIcon@2x.png build/BrandMark.png "$STAGE/Contents/Resources/"
+find Resources -name "*.svg" -exec cp {} "$STAGE/Contents/Resources/" \; 2>/dev/null || true
 cp Resources/Info.plist "$STAGE/Contents/Info.plist"
 printf 'APPL????' > "$STAGE/Contents/PkgInfo"
 

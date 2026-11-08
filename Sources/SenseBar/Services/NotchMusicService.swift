@@ -133,6 +133,7 @@ final class NotchMusicService: ObservableObject {
 
     // MARK: - Playback Controls
 
+    /// Chuyển đổi trạng thái Phát / Tạm dừng (Play / Pause) của bài hát đang phát.
     func togglePlayPause() {
         if var current = track {
             current.isPlaying.toggle()
@@ -142,14 +143,18 @@ final class NotchMusicService: ObservableObject {
         sendCommand("toggle")
     }
 
+    /// Chuyển sang bài hát tiếp theo.
     func nextTrack() {
         sendCommand("next")
     }
 
+    /// Quay lại bài hát trước đó.
     func previousTrack() {
         sendCommand("previous")
     }
 
+    /// Tua nhanh hoặc tua lùi bài hát đến thời điểm cụ thể.
+    /// - Parameter seconds: Vị trí giây trong bài hát cần phát tới.
     func seek(to seconds: TimeInterval) {
         if var current = track {
             current.elapsed = max(0, min(current.duration, seconds))
@@ -159,6 +164,7 @@ final class NotchMusicService: ObservableObject {
         sendCommand(String(format: "seek:%.2f", max(0, seconds)))
     }
 
+    /// Kích hoạt và mở ứng dụng đang phát nhạc lên màn hình (Spotify, Apple Music, Chrome,...).
     func openPlayerApp() {
         guard let track else { return }
         if !track.bundleID.isEmpty,

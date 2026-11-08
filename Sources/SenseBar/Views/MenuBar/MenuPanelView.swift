@@ -26,8 +26,6 @@ enum PopoverMode: String, CaseIterable, Identifiable {
 }
 
 struct MenuPanelView: View {
-    let onOpenSettings: () -> Void
-    let onOpenPermissions: () -> Void
     let onQuit: () -> Void
 
     @ObservedObject private var l10n = L10n.shared
@@ -41,6 +39,7 @@ struct MenuPanelView: View {
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
     @AppStorage(DefaultsKey.notchExpandOnHover) private var expandOnHover: Bool = true
     @AppStorage(DefaultsKey.notchShowVisualizer) private var showVisualizer: Bool = true
+    @State private var showingSettings: Bool = false
     @Namespace private var modeAnimation
 
     private var selectedMode: PopoverMode {
@@ -48,6 +47,39 @@ struct MenuPanelView: View {
     }
 
     var body: some View {
+        Group {
+            if showingSettings {
+                PopoverSettingsView(
+                    onBack: {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                            showingSettings = false
+                        }
+                    },
+                    onQuit: onQuit
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
+            } else {
+                mainControlsView
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
+            }
+        }
+        .padding(14)
+        .frame(width: 356)
+        .fixedSize(horizontal: false, vertical: true)
+        .panelGlassSurface()
+        .onAppear {
+            permissions.refreshStatus()
+            audio.refreshAll()
+        }
+    }
+
+    private var mainControlsView: some View {
         VStack(spacing: 10) {
             topHeaderBar
 
@@ -67,17 +99,9 @@ struct MenuPanelView: View {
 
             bottomFooterBar
         }
-        .padding(14)
-        .frame(width: 356)
-        .fixedSize(horizontal: false, vertical: true)
-        .panelGlassSurface()
-        .onAppear {
-            permissions.refreshStatus()
-            audio.refreshAll()
-        }
     }
 
-    // MARK: - 1. Top Header Bar
+    // MARK: - Header Bar
 
     private var topHeaderBar: some View {
         HStack(spacing: 10) {
@@ -120,7 +144,7 @@ struct MenuPanelView: View {
         .padding(.horizontal, 2)
     }
 
-    // MARK: - 2. Cảnh báo quyền Trợ năng (nếu chưa cấp)
+    // MARK: - Cảnh báo quyền Trợ năng
 
     private var permissionWarningBanner: some View {
         HStack(spacing: 8) {
@@ -139,7 +163,7 @@ struct MenuPanelView: View {
             Spacer(minLength: 4)
 
             Button {
-                onOpenPermissions()
+                PermissionManager.shared.requestAccessibility()
             } label: {
                 Text(l10n.string(vi: "Cấp quyền", en: "Grant"))
                     .font(.system(size: 10.5, weight: .semibold))
@@ -165,7 +189,7 @@ struct MenuPanelView: View {
         )
     }
 
-    // MARK: - 3. Thanh chuyển chế độ trung tính (Neutral Capsule Switcher)
+    // MARK: - Thanh chuyển chế độ
 
     private var neutralSegmentBar: some View {
         HStack(spacing: 4) {
@@ -211,7 +235,7 @@ struct MenuPanelView: View {
         )
     }
 
-    // MARK: - 4A. Tab Dynamic Island (Ảnh Example + Bộ điều khiển)
+    // MARK: - Tab Dynamic Island
 
     private var dynamicIslandControlSection: some View {
         VStack(spacing: 8) {
@@ -220,27 +244,8 @@ struct MenuPanelView: View {
 
             // Khung Điều khiển Dynamic Island
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(l10n.string(vi: "Tùy chỉnh Dynamic Island", en: "Dynamic Island Controls"))
-                        .font(.system(size: 12, weight: .bold))
-                    Spacer()
-                    Button {
-                        islandController.togglePreviewExpansion()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: islandController.isExpanded ? "chevron.up" : "sparkles")
-                                .font(.system(size: 10, weight: .semibold))
-                            Text(islandController.isExpanded
-                                 ? l10n.string(vi: "Thu gọn", en: "Collapse")
-                                 : l10n.string(vi: "Mở thử trên màn hình", en: "Preview on Screen"))
-                                .font(.system(size: 10.5, weight: .semibold))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.primary.opacity(0.07)))
-                    }
-                    .buttonStyle(.plain)
-                }
+                Text(l10n.string(vi: "Tùy chỉnh Dynamic Island", en: "Dynamic Island Controls"))
+                    .font(.system(size: 12, weight: .bold))
 
                 // Chọn kiểu dáng: Ôm sát Tai thỏ vs Viên nang nổi
                 HStack(spacing: 6) {
@@ -251,7 +256,7 @@ struct MenuPanelView: View {
                     )
                     styleOptionButton(
                         id: "pill",
-                        icon: "capsule.portrait.fill",
+                        icon: "capsule.fill",
                         title: l10n.string(vi: "Viên nang nổi", en: "Floating Pill")
                     )
                 }
@@ -266,11 +271,10 @@ struct MenuPanelView: View {
 
                 compactToggleRow(
                     icon: "waveform",
-                    title: l10n.string(vi: "Hiển thị sóng nhạc theo màu bìa đĩa", en: "Show album-tinted audio visualizer"),
+                    title: l10n.string(vi: "Hiển thị sóng nhạc theo bài hát", en: "Show album-tinted audio visualizer"),
                     isOn: $showVisualizer
                 )
             }
-            .padding(12)
             .panelCard()
         }
     }
@@ -507,7 +511,6 @@ struct MenuPanelView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
             }
         }
-        .padding(11)
         .panelCard()
     }
 
@@ -583,23 +586,24 @@ struct MenuPanelView: View {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
                 notchStyle = id
             }
+            NotchDynamicIslandController.shared.syncVisibility()
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 11, weight: selected ? .semibold : .medium))
+                    .font(.system(size: 11, weight: selected ? .bold : .medium))
             }
-            .foregroundStyle(selected ? .primary : .secondary)
+            .foregroundStyle(selected ? Color.blue : Color.secondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(selected ? Color.primary.opacity(0.10) : Color.primary.opacity(0.03))
+                    .fill(selected ? Color.blue.opacity(0.14) : Color.primary.opacity(0.03))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(selected ? Color.primary.opacity(0.22) : Color.primary.opacity(0.06), lineWidth: 0.8)
+                    .strokeBorder(selected ? Color.blue.opacity(0.55) : Color.primary.opacity(0.06), lineWidth: selected ? 1.2 : 0.8)
             )
         }
         .buttonStyle(.plain)
@@ -626,7 +630,7 @@ struct MenuPanelView: View {
         }
     }
 
-    // MARK: - 4B. Tab Loa & Ứng dụng (Ảnh Example + Loa tổng + Nhiều ứng dụng)
+    // MARK: - Tab Loa & Ứng dụng
 
     private var audioMixerControlSection: some View {
         VStack(spacing: 8) {
@@ -670,7 +674,6 @@ struct MenuPanelView: View {
                     .controlSize(.small)
                 }
             }
-            .padding(11)
             .panelCard()
 
             // Khung Điều chỉnh âm lượng từng ứng dụng (0% - 200%)
@@ -693,7 +696,6 @@ struct MenuPanelView: View {
                     }
                 }
             }
-            .padding(11)
             .panelCard()
         }
     }
@@ -727,7 +729,6 @@ struct MenuPanelView: View {
                     .fill(Color.primary.opacity(0.04))
             )
         }
-        .padding(11)
         .panelCard()
     }
 
@@ -804,11 +805,15 @@ struct MenuPanelView: View {
         }
     }
 
-    // MARK: - 5. Bottom Footer Bar
+    // MARK: - Footer Bar
 
     private var bottomFooterBar: some View {
         HStack(spacing: 8) {
-            Button(action: onOpenSettings) {
+            Button {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    showingSettings = true
+                }
+            } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 11, weight: .semibold))

@@ -78,17 +78,63 @@ extension View {
 private struct PanelCardModifier: ViewModifier {
     var padded = true
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(DefaultsKey.liquidGlassEnabled) private var liquidGlassEnabled: Bool = true
 
     func body(content: Content) -> some View {
+        let isLight = colorScheme == .light
+        let shape = RoundedRectangle(cornerRadius: 13, style: .continuous)
+
         content
             .padding(padded ? 12 : 0)
-            .background(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(PanelSurface.cardFill(for: colorScheme))
-            )
+            .background {
+                if liquidGlassEnabled {
+                    ZStack {
+                        // Kính mờ siêu mỏng hardware-accelerated cho Intel & macOS 14/15
+                        shape.fill(.ultraThinMaterial)
+
+                        // Lớp phủ màu kính mờ xuyên thấu
+                        shape.fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.white.opacity(isLight ? 0.40 : 0.08), location: 0.0),
+                                    .init(color: Color.white.opacity(isLight ? 0.18 : 0.03), location: 1.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                        // Vệt phản chiếu ánh sáng kính nhẹ ở đỉnh
+                        shape.fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.white.opacity(isLight ? 0.32 : 0.12), location: 0.0),
+                                    .init(color: Color.clear, location: 0.45)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    }
+                } else {
+                    shape.fill(PanelSurface.cardFill(for: colorScheme))
+                }
+            }
             .overlay(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .strokeBorder(PanelSurface.border(for: colorScheme), lineWidth: 0.85)
+                shape.strokeBorder(
+                    liquidGlassEnabled
+                        ? LinearGradient(
+                            stops: [
+                                .init(color: (isLight ? Color.black : Color.white).opacity(isLight ? 0.16 : 0.22), location: 0.0),
+                                .init(color: (isLight ? Color.black : Color.white).opacity(isLight ? 0.05 : 0.06), location: 0.60),
+                                .init(color: (isLight ? Color.black : Color.white).opacity(isLight ? 0.10 : 0.14), location: 1.0)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        : LinearGradient(colors: [PanelSurface.border(for: colorScheme)], startPoint: .top, endPoint: .bottom),
+                    lineWidth: 0.85
+                )
             )
     }
 }
@@ -119,11 +165,21 @@ enum BrandIconResources {
         }
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let candidates = [
+            cwd.appendingPathComponent("Resources/Icons/\(filename)"),
             cwd.appendingPathComponent("Resources/Brand/\(filename)"),
             cwd.appendingPathComponent("build/\(filename)"),
             cwd.appendingPathComponent("Resources/\(filename)")
         ]
         return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    /// Đọc và trả về NSImage từ file SVG 
+    static func svgImage(named name: String) -> NSImage? {
+        let filename = name.hasSuffix(".svg") ? name : "\(name).svg"
+        guard let url = findResourceURL(named: filename) else { return nil }
+        let image = NSImage(contentsOf: url)
+        image?.isTemplate = true
+        return image
     }
 
     /// Trả về NSImage của AppIcon chính thức

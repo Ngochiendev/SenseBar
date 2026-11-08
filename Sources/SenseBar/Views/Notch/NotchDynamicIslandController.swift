@@ -138,6 +138,7 @@ final class NotchDynamicIslandController: ObservableObject {
         islandSize()
     }
 
+    /// Khởi động hệ thống Dynamic Island, lắng nghe sự kiện chuột, nhạc và màn hình.
     func start() {
         _ = NotchMusicService.shared
         setupPanelIfNeeded()
@@ -146,6 +147,7 @@ final class NotchDynamicIslandController: ObservableObject {
         startMouseTracking()
     }
 
+    /// Đồng bộ trạng thái hiển thị của Dynamic Island theo cài đặt bật/tắt tính năng.
     func syncVisibility() {
         let enabled = SensePillar.dynamicIsland.isEnabled()
         guard enabled else {
@@ -155,10 +157,35 @@ final class NotchDynamicIslandController: ObservableObject {
             return
         }
         setupPanelIfNeeded()
+        if mouseMonitor == nil {
+            startMouseTracking()
+        }
         syncFullscreenMonitoring()
         syncAllDisplays()
     }
 
+    /// Được gọi tự động ngay khi macOS vừa cấp quyền Accessibility thành công (1 phát ăn ngay)
+    func permissionDidGrant() {
+        restartMouseTracking()
+        syncVisibility()
+        repositionPanel()
+    }
+
+    /// Khởi động lại trình giám sát sự kiện chuột toàn cục
+    func restartMouseTracking() {
+        if let mm = mouseMonitor {
+            NSEvent.removeMonitor(mm)
+            mouseMonitor = nil
+        }
+        if let lmm = localMouseMonitor {
+            NSEvent.removeMonitor(lmm)
+            localMouseMonitor = nil
+        }
+        startMouseTracking()
+    }
+
+    /// Mở rộng Dynamic Island để hiển thị bảng điều khiển nhạc chi tiết.
+    /// - Parameter pinned: `true` nếu mở bằng cách nhấp chuột (cần giữ mở cho đến khi bấm ngoài).
     func expand(Pinned pinned: Bool = false) {
         hoverWorkItem?.cancel()
         hoverWorkItem = nil
@@ -173,6 +200,7 @@ final class NotchDynamicIslandController: ObservableObject {
         mainPanel?.ignoresMouseEvents = false
     }
 
+    /// Thu gọn Dynamic Island về kích thước ban đầu (ôm sát tai thỏ hoặc viên nang).
     func collapse() {
         hoverWorkItem?.cancel()
         hoverWorkItem = nil
@@ -186,18 +214,6 @@ final class NotchDynamicIslandController: ObservableObject {
         }
         let inside = isPointInsideIsland(NSEvent.mouseLocation)
         mainPanel?.ignoresMouseEvents = !inside
-    }
-
-    func togglePreviewExpansion() {
-        if !SensePillar.dynamicIsland.isEnabled() {
-            SensePillar.dynamicIsland.setEnabled(true)
-            syncVisibility()
-        }
-        if isExpanded {
-            collapse()
-        } else {
-            expand(Pinned: true)
-        }
     }
 
     // MARK: - Quản lý Cửa sổ & Đa màn hình (Displays: Automatic, BuiltIn, Main, Pointer, All)
@@ -525,13 +541,16 @@ final class NotchDynamicIslandController: ObservableObject {
     }
 
     private func startMouseTracking() {
-        guard mouseMonitor == nil else { return }
-        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .leftMouseDragged]) { [weak self] event in
-            self?.handleMouseEvent(type: event.type)
+        if mouseMonitor == nil {
+            mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .leftMouseDragged]) { [weak self] event in
+                self?.handleMouseEvent(type: event.type)
+            }
         }
-        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .leftMouseDragged]) { [weak self] event in
-            self?.handleMouseEvent(type: event.type)
-            return event
+        if localMouseMonitor == nil {
+            localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .leftMouseDragged]) { [weak self] event in
+                self?.handleMouseEvent(type: event.type)
+                return event
+            }
         }
     }
 

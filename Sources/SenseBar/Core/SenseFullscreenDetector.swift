@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// SenseBar — Fullscreen & Space Detection
-
 import AppKit
 import CoreGraphics
 import Foundation
@@ -26,6 +23,9 @@ enum SenseSpaceTopology {
         return unsafeBitCast(symbol, to: CopyDisplaySpacesFunction.self)
     }()
 
+    /// Kiểm tra xem màn hình được chỉ định có đang ở chế độ Space toàn màn hình (Native Fullscreen Space) hay không.
+    /// - Parameter displayID: Định danh phần cứng của màn hình (`CGDirectDisplayID`).
+    /// - Returns: `true` nếu không gian hiển thị hiện tại là fullscreen Space.
     static func isFullscreenSpace(on displayID: CGDirectDisplayID) -> Bool {
         guard connection != 0, let copyManagedDisplaySpaces,
               let displayDicts = copyManagedDisplaySpaces(connection)?.takeRetainedValue() as? [[String: Any]],
@@ -151,20 +151,26 @@ enum SenseAppFullscreen {
 
 // MARK: - SenseFullscreenDetector
 
+/// Bộ phát hiện trạng thái Toàn màn hình (Fullscreen) trên từng màn hình macOS.
+/// Hỗ trợ cả Native Fullscreen Space và ứng dụng che kín màn hình (YouTube, VLC, Game).
 @MainActor
 public enum SenseFullscreenDetector {
+    /// Kiểm tra màn hình có đang chạy ứng dụng hoặc nội dung toàn màn hình hay không.
+    /// - Parameter displayID: Định danh màn hình phần cứng.
+    /// - Returns: `true` nếu màn hình đang chạy toàn màn hình.
     public static func isFullscreen(on displayID: CGDirectDisplayID) -> Bool {
-        // 1. Native macOS fullscreen Space
         if SenseSpaceTopology.isFullscreenSpace(on: displayID) {
             return true
         }
-        // 2. Custom App Fullscreen / Media / YouTube in Browser
         if SenseAppFullscreen.coveredDisplays().contains(displayID) {
             return true
         }
         return false
     }
 
+    /// Kiểm tra đối tượng `NSScreen` có đang chạy toàn màn hình hay không.
+    /// - Parameter screen: Màn hình cần kiểm tra (`NSScreen`).
+    /// - Returns: `true` nếu đang chạy toàn màn hình.
     public static func isFullscreen(on screen: NSScreen) -> Bool {
         isFullscreen(on: screen.displayID)
     }

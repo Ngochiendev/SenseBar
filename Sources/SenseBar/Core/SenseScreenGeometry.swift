@@ -45,7 +45,7 @@ public struct SenseScreenGeometry: Equatable {
         }
     }
 
-    // MARK: - Kích thước chuẩn cho Capsule (Ảnh 1)
+    // MARK: - Kích thước chuẩn cho Capsule
 
     /// Chiều cao chuẩn của viên nang để luôn nằm gọn và căn giữa trục dọc trong Menu Bar
     public var capsuleHeight: CGFloat {
@@ -61,22 +61,29 @@ public struct SenseScreenGeometry: Equatable {
         return max(0, ((menuBarHeight - capsuleHeight) / 2).rounded(.down))
     }
 
-    /// Kích thước viên nang chuẩn (có thể điều chỉnh chiều ngang qua customWidth)
+    /// Kích thước viên nang chuẩn trong Menu Bar.
+    /// - Parameters:
+    ///   - customWidth: Độ tinh chỉnh chiều rộng (px).
+    ///   - customHeight: Độ tinh chỉnh chiều cao (px).
+    /// - Returns: Kích thước `CGSize` của viên nang thu gọn.
     public func compactCapsuleSize(customWidth: Double = 0, customHeight: Double = 0) -> CGSize {
         let baseWidth: CGFloat = 208.0 + CGFloat(customWidth)
         let baseHeight: CGFloat = capsuleHeight + CGFloat(customHeight)
         return CGSize(width: max(130.0, baseWidth), height: max(18.0, min(menuBarHeight, baseHeight)))
     }
 
-    // MARK: - Kích thước chuẩn cho Notch (Ảnh 2)
+    // MARK: - Kích thước chuẩn cho Notch
 
-    /// Cánh mở rộng bên cạnh tai thỏ vật lý:
-    /// 12pt (vai cong topShoulder) + 12pt (padding đen bên trong vách đứng) + 20pt (ảnh đĩa / sóng nhạc) = 44pt
+    /// Cánh mở rộng bên cạnh tai thỏ vật lý.
     public var compactNotchWingWidth: CGFloat {
         return 40.0
     }
 
-    /// Kích thước toàn bộ của Dynamic Island thu gọn trên màn hình có tai thỏ (hoặc tai thỏ giả lập)
+    /// Kích thước toàn bộ của Dynamic Island thu gọn ôm sát tai thỏ.
+    /// - Parameters:
+    ///   - customWidth: Độ tinh chỉnh chiều rộng (px).
+    ///   - customHeight: Độ tinh chỉnh chiều cao (px).
+    /// - Returns: Kích thước `CGSize` của tai thỏ thu gọn.
     public func compactNotchSize(customWidth: Double = 0, customHeight: Double = 0) -> CGSize {
         // Màn hình MacBook có tai thỏ giữ nguyên 32pt, màn hình ngoài giảm -2pt (30pt) để khớp mép dưới
         let baseHeight: CGFloat = isNotched ? cameraHeight : (Self.standardNotchHeight - 2.0)
@@ -88,6 +95,7 @@ public struct SenseScreenGeometry: Equatable {
 
     // MARK: - Kích thước chuẩn khi Mở rộng (Expanded)
 
+    /// Kích thước hiển thị khi Dynamic Island mở rộng chi tiết điều khiển nhạc.
     public var expandedSize: CGSize {
         return CGSize(width: 396.0, height: 176.0)
     }

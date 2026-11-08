@@ -53,21 +53,9 @@ struct SenseStrings {
     var btnContinue: String
     var btnStart: String
 
-    // Cửa sổ Cài đặt (Settings Window)
-    var settingsWindowTitle: String
-    var settingsTabGeneral: String
-    var settingsTabPermissions: String
-    var settingsTabAbout: String
-    var settingsStartupSection: String
+    // Cài đặt (Settings)
     var settingsLaunchAtLogin: String
     var settingsLaunchAtLoginDesc: String
-    var settingsFeaturesSection: String
-    var settingsOnboardingSection: String
-    var settingsReopenWelcomeDesc: String
-    var aboutSubtitle: String
-    var aboutVersionFormat: String
-    var aboutLicenseBadge: String
-    var aboutOpenGitHub: String
 
     static let vi = SenseStrings(
         menuBarTooltip: "SenseBar — Đang hoạt động",
@@ -105,20 +93,8 @@ struct SenseStrings {
         btnContinue: "Tiếp tục",
         btnStart: "Bắt đầu sử dụng",
 
-        settingsWindowTitle: "Cài đặt SenseBar",
-        settingsTabGeneral: "Cài đặt chung",
-        settingsTabPermissions: "Quyền truy cập",
-        settingsTabAbout: "Giới thiệu",
-        settingsStartupSection: "Khởi động & Hệ thống",
         settingsLaunchAtLogin: "Khởi động cùng macOS",
-        settingsLaunchAtLoginDesc: "Tự động chạy SenseBar trên thanh Menu Bar khi bạn đăng nhập vào máy Mac.",
-        settingsFeaturesSection: "Các tính năng của SenseBar",
-        settingsOnboardingSection: "Hướng dẫn ban đầu",
-        settingsReopenWelcomeDesc: "Xem lại màn hình giới thiệu và thiết lập ban đầu của SenseBar.",
-        aboutSubtitle: "Tiện ích thanh Menu Bar gọn nhẹ cho macOS — Tích hợp Tai thỏ & Dynamic Island trình phát nhạc và Bộ trộn âm thanh từng ứng dụng.",
-        aboutVersionFormat: "Phiên bản %@ (Build %@)",
-        aboutLicenseBadge: "Giấy phép mã nguồn mở GNU GPL v3.0",
-        aboutOpenGitHub: "Xem mã nguồn trên GitHub"
+        settingsLaunchAtLoginDesc: "Tự động chạy SenseBar trên thanh Menu Bar khi bạn đăng nhập vào máy Mac."
     )
 
     static let en = SenseStrings(
@@ -157,20 +133,8 @@ struct SenseStrings {
         btnContinue: "Continue",
         btnStart: "Start Using",
 
-        settingsWindowTitle: "SenseBar Settings",
-        settingsTabGeneral: "General",
-        settingsTabPermissions: "Permissions",
-        settingsTabAbout: "About",
-        settingsStartupSection: "Startup & System",
         settingsLaunchAtLogin: "Launch at Login",
-        settingsLaunchAtLoginDesc: "Automatically start SenseBar in the Menu Bar when you log into your Mac.",
-        settingsFeaturesSection: "SenseBar Features",
-        settingsOnboardingSection: "Welcome Guide",
-        settingsReopenWelcomeDesc: "Reopen the initial welcome and setup guide.",
-        aboutSubtitle: "A lightweight macOS Menu Bar companion — Uniting Dynamic Island and Per-App Audio Studio.",
-        aboutVersionFormat: "Version %@ (Build %@)",
-        aboutLicenseBadge: "GNU GPL v3.0 Open Source License",
-        aboutOpenGitHub: "View Source on GitHub"
+        settingsLaunchAtLoginDesc: "Automatically start SenseBar in the Menu Bar when you log into your Mac."
     )
 }
 

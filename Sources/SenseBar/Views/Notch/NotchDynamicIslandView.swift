@@ -283,8 +283,49 @@ struct NotchDynamicIslandView: View {
     @ViewBuilder
     private func classicGlassBackground<S: Shape>(_ shape: S) -> some View {
         ZStack {
+            // Hiệu ứng kính mờ cho macOS 14/15 và máy Intel
             NotchTranslucentMaterial(cornerRadius: 24)
-            shape.fill(Color.black.opacity(0.48))
+
+            shape.fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.black.opacity(0.45), location: 0.0),
+                        .init(color: Color.black.opacity(0.62), location: 0.35),
+                        .init(color: Color.black.opacity(0.78), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+
+            // Vệt phản chiếu ánh sáng mép trên
+            shape.fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.white.opacity(0.32), location: 0.0),
+                        .init(color: Color.white.opacity(0.12), location: 0.12),
+                        .init(color: Color.white.opacity(0.02), location: 0.32),
+                        .init(color: Color.clear, location: 0.58)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+
+            // Viền khúc xạ vát cạnh
+            shape.stroke(
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.white.opacity(0.46), location: 0.0),
+                        .init(color: Color.white.opacity(0.18), location: 0.30),
+                        .init(color: Color.white.opacity(0.06), location: 0.70),
+                        .init(color: Color.white.opacity(0.20), location: 1.0)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 0.9
+            )
         }
     }
 
@@ -293,13 +334,13 @@ struct NotchDynamicIslandView: View {
     @ViewBuilder
     private func compactContent(size: CGSize, isPill: Bool, geo: SenseScreenGeometry) -> some View {
         if isPill {
-            // Hiển thị dạng Capsule nổi trong Menu Bar (Ảnh 1)
+            // Hiển thị dạng Capsule nổi trong Menu Bar
             let coverSize: CGFloat = max(14, size.height - 4)
             HStack(spacing: 6) {
                 // Ảnh đĩa / bài hát
                 albumCoverView(size: coverSize, cornerRadius: 4.5)
 
-                // Biểu tượng tai nghe + Tên bài hát (như ảnh 1)
+                // Biểu tượng tai nghe và tên bài hát đang phát
                 HStack(spacing: 4) {
                     Image(systemName: "headphones")
                         .font(.system(size: 10, weight: .semibold))
@@ -313,7 +354,7 @@ struct NotchDynamicIslandView: View {
 
                 Spacer(minLength: 4)
 
-                // Cột sóng nhạc mini (như ảnh 1)
+                // Cột sóng nhạc mini
                 if showVisualizer {
                     SenseEqualizerBars(
                         isPlaying: activeTrack.isPlaying,
@@ -331,7 +372,7 @@ struct NotchDynamicIslandView: View {
             .padding(.horizontal, 6)
             .frame(width: size.width, height: size.height)
         } else {
-            // Hiển thị ôm sát phần cứng Tai thỏ (Notch Wings - Ảnh 2)
+            // Hiển thị ôm sát phần cứng Tai thỏ (Notch Wings)
             // Lưu ý: NotchAttachedShape có phần vai loe ở đỉnh (0 ..< shoulder = 12pt),
             // vách đứng màu đen thực tế bắt đầu từ x = shoulder (12pt).
             // Do đó để có đúng 12pt padding tính từ vách đen, lề tính từ mép khung là shoulder + 12pt.

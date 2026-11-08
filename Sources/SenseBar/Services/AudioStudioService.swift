@@ -70,6 +70,8 @@ final class AudioStudioService: ObservableObject {
 
     // MARK: - Master Volume & CoreAudio Device Name
 
+    /// Điều chỉnh âm lượng tổng (Master Volume) của hệ thống macOS.
+    /// - Parameter value: Mức âm lượng từ 0.0 (tắt tiếng) đến 1.0 (100%).
     func setMasterVolume(_ value: Double) {
         let clamped = min(1.0, max(0.0, value))
         masterVolume = clamped
@@ -80,12 +82,14 @@ final class AudioStudioService: ObservableObject {
         runAppleScript("set volume output volume \(percent) without output muted")
     }
 
+    /// Bật hoặc tắt trạng thái ngắt âm thanh (Mute) toàn hệ thống.
     func toggleMasterMute() {
         isMasterMuted.toggle()
         let muteStr = isMasterMuted ? "with output muted" : "without output muted"
         runAppleScript("set volume \(muteStr)")
     }
 
+    /// Đọc mức âm lượng và trạng thái tắt tiếng hiện tại từ macOS.
     func refreshSystemVolume() {
         appleScriptQueue.async { [weak self] in
             let script = NSAppleScript(source: "return (output volume of (get volume settings) as string) & \",\" & (output muted of (get volume settings) as string)")
@@ -137,6 +141,7 @@ final class AudioStudioService: ObservableObject {
 
     // MARK: - Per-App Volume Controls (0% - 200%)
 
+    /// Quét danh sách các ứng dụng đa phương tiện đang chạy có hỗ trợ điều chỉnh âm lượng riêng.
     func refreshRunningAudioApps() {
         let running = NSWorkspace.shared.runningApplications.filter { app in
             guard app.activationPolicy == .regular, !app.isTerminated,
@@ -199,6 +204,10 @@ final class AudioStudioService: ObservableObject {
         apps = result
     }
 
+    /// Điều chỉnh âm lượng độc lập cho một ứng dụng cụ thể.
+    /// - Parameters:
+    ///   - id: Bundle Identifier của ứng dụng (vd: `com.apple.Music`).
+    ///   - volume: Mức âm lượng từ 0.0 đến 2.0 (hỗ trợ khuếch đại 200%).
     func setAppVolume(id: String, volume: Double) {
         let clamped = min(2.0, max(0.0, volume))
         savedAppVolumes[id] = clamped
@@ -210,6 +219,8 @@ final class AudioStudioService: ObservableObject {
         }
     }
 
+    /// Bật hoặc tắt trạng thái ngắt âm lượng riêng của ứng dụng.
+    /// - Parameter id: Bundle Identifier của ứng dụng.
     func toggleAppMute(id: String) {
         guard let idx = apps.firstIndex(where: { $0.id == id }) else { return }
         let newMuted = !apps[idx].isMuted

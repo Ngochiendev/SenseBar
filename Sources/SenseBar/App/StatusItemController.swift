@@ -6,14 +6,11 @@ final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
     private let onOpenWelcome: () -> Void
-    private let onOpenSettings: (SettingsTab) -> Void
 
     init(
-        onOpenWelcome: @escaping () -> Void,
-        onOpenSettings: @escaping (SettingsTab) -> Void
+        onOpenWelcome: @escaping () -> Void
     ) {
         self.onOpenWelcome = onOpenWelcome
-        self.onOpenSettings = onOpenSettings
         super.init()
         setupPopover()
         setupStatusItem()
@@ -25,14 +22,6 @@ final class StatusItemController: NSObject {
         popover.hasFullSizeContent = PanelSurface.popoverHostsFullSizeContent
 
         let panelView = MenuPanelView(
-            onOpenSettings: { [weak self] in
-                self?.closePopover()
-                self?.onOpenSettings(.general)
-            },
-            onOpenPermissions: { [weak self] in
-                self?.closePopover()
-                self?.onOpenSettings(.permissions)
-            },
             onQuit: {
                 NSApplication.shared.terminate(nil)
             }
@@ -151,7 +140,7 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func openSettingsAction() {
-        onOpenSettings(.general)
+        showPopover()
     }
 
     @objc private func openWelcomeAction() {
@@ -159,7 +148,7 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func openAboutAction() {
-        onOpenSettings(.about)
+        showPopover()
     }
 
     @objc private func quitAction() {
