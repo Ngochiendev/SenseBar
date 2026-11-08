@@ -231,20 +231,38 @@ struct SettingsWindowView: View {
                             .toggleStyle(.switch)
                     }
 
-                    VStack(spacing: 10) {
-                        HStack(spacing: 10) {
-                            displayOptionButton(id: "automatic", title: l10n.string(vi: "Tự động", en: "Automatic"), symbol: "display.2")
-                            displayOptionButton(id: "builtIn", title: l10n.string(vi: "Màn hình tích hợp", en: "Built-in display"), symbol: "laptopcomputer")
-                        }
-                        HStack(spacing: 10) {
-                            displayOptionButton(id: "main", title: l10n.string(vi: "Màn hình chính", en: "Main display"), symbol: "display")
-                            displayOptionButton(id: "pointer", title: l10n.string(vi: "Đi theo con trỏ", en: "Follow pointer"), symbol: "cursorarrow.motionlines")
-                        }
-                        HStack(spacing: 10) {
-                            displayOptionButton(id: "all", title: l10n.string(vi: "Tất cả màn hình", en: "All displays"), symbol: "rectangle.on.rectangle")
-                            Spacer()
-                                .frame(maxWidth: .infinity)
-                        }
+                    // Danh sách màn hình hiển thị - SenseBar Inset Cards
+                    VStack(spacing: 7) {
+                        displayOptionRow(
+                            id: "automatic",
+                            title: l10n.string(vi: "Tự động phát hiện", en: "Automatic"),
+                            subtitle: l10n.string(vi: "Tự động chọn màn hình tối ưu nhất khi cắm/rút thiết bị", en: "Automatically selects the best display"),
+                            icon: "sparkles.tv"
+                        )
+                        displayOptionRow(
+                            id: "builtIn",
+                            title: l10n.string(vi: "Màn hình tích hợp", en: "Built-in display"),
+                            subtitle: l10n.string(vi: "Chỉ hiển thị trên màn hình chính của MacBook", en: "Shows only on MacBook built-in screen"),
+                            icon: "laptopcomputer"
+                        )
+                        displayOptionRow(
+                            id: "main",
+                            title: l10n.string(vi: "Màn hình chính macOS", en: "Main display"),
+                            subtitle: l10n.string(vi: "Hiển thị trên màn hình chứa thanh Menu Bar chính", en: "Always pinned to macOS primary display"),
+                            icon: "display"
+                        )
+                        displayOptionRow(
+                            id: "pointer",
+                            title: l10n.string(vi: "Đi theo con trỏ chuột", en: "Follow mouse pointer"),
+                            subtitle: l10n.string(vi: "Dynamic Island tự động di chuyển sang màn hình đang trỏ chuột", en: "Dynamic Island moves to where your mouse is"),
+                            icon: "cursorarrow.motionlines"
+                        )
+                        displayOptionRow(
+                            id: "all",
+                            title: l10n.string(vi: "Tất cả màn hình", en: "All displays"),
+                            subtitle: l10n.string(vi: "Hiển thị đồng thời trên mọi màn hình đang kết nối", en: "Shows simultaneously on all connected screens"),
+                            icon: "rectangle.on.rectangle"
+                        )
                     }
                 }
             }
@@ -253,33 +271,42 @@ struct SettingsWindowView: View {
             settingsCard(title: l10n.string(vi: "Màn hình không có tai thỏ", en: "Displays without a notch")) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 12) {
-                        styleSilhouetteButton(id: "pill", title: l10n.string(vi: "Capsule", en: "Capsule"))
-                        styleSilhouetteButton(id: "notch", title: l10n.string(vi: "Notch", en: "Notch"))
+                        styleSilhouetteButton(id: "pill", title: l10n.string(vi: "Capsule (Viên nang)", en: "Capsule"))
+                        styleSilhouetteButton(id: "notch", title: l10n.string(vi: "Notch (Tai thỏ ảo)", en: "Notch"))
                     }
                 }
             }
 
-            // Tinh chỉnh kích thước viên nang (Capsule fit)
+            // Tinh chỉnh kích thước viên nang (Capsule fit) - SenseBar Studio
             settingsCard(title: l10n.string(vi: "Căn chỉnh kích thước (Capsule fit)", en: "Capsule fit")) {
-                VStack(alignment: .leading, spacing: 12) {
-                    sliderSettingRow(
-                        title: l10n.string(vi: "Chiều rộng (Width)", en: "Width"),
-                        value: $capsuleFitWidth,
-                        range: -60...120,
-                        step: 2
-                    )
-                    sliderSettingRow(
-                        title: l10n.string(vi: "Chiều cao (Height)", en: "Height"),
-                        value: $capsuleFitHeight,
-                        range: -4...6,
-                        step: 1
-                    )
-                    sliderSettingRow(
-                        title: l10n.string(vi: "Cách mép trên (Distance from top)", en: "Distance from top"),
-                        value: $capsuleFitDrop,
-                        range: -6...16,
-                        step: 1
-                    )
+                VStack(alignment: .leading, spacing: 14) {
+                    capsulePreviewMockup
+
+                    Divider().opacity(0.4)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        sliderSettingRow(
+                            icon: "arrow.left.and.right",
+                            title: l10n.string(vi: "Chiều rộng", en: "Width"),
+                            value: $capsuleFitWidth,
+                            range: -60...120,
+                            step: 2
+                        )
+                        sliderSettingRow(
+                            icon: "arrow.up.and.down",
+                            title: l10n.string(vi: "Chiều cao", en: "Height"),
+                            value: $capsuleFitHeight,
+                            range: -4...6,
+                            step: 1
+                        )
+                        sliderSettingRow(
+                            icon: "arrow.down.to.line",
+                            title: l10n.string(vi: "Khoảng cách mép trên", en: "Distance from top"),
+                            value: $capsuleFitDrop,
+                            range: -6...16,
+                            step: 1
+                        )
+                    }
 
                     Text(l10n.string(
                         vi: "Thay đổi kích thước và hạ thấp vị trí của viên nang từ mép trên màn hình đối với màn hình không có tai thỏ.",
@@ -393,32 +420,63 @@ struct SettingsWindowView: View {
         NotchDynamicIslandController.shared.repositionPanel()
     }
 
-    private func displayOptionButton(id: String, title: String, symbol: String) -> some View {
+    private func displayOptionRow(
+        id: String,
+        title: String,
+        subtitle: String,
+        icon: String
+    ) -> some View {
         let isSelected = displayTarget == id
         return Button {
-            displayTarget = id
+            withAnimation(.easeInOut(duration: 0.15)) {
+                displayTarget = id
+            }
             NotchDynamicIslandController.shared.repositionPanel()
         } label: {
-            VStack(spacing: 8) {
-                Image(systemName: symbol)
-                    .font(.system(size: 26, weight: .regular))
-                    .foregroundStyle(isSelected ? Color(red: 0.16, green: 0.50, blue: 0.98) : Color.primary.opacity(0.85))
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isSelected ? Color.blue : Color.primary.opacity(0.06))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.white : Color.primary.opacity(0.8))
+                }
 
-                Text(title)
-                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? Color(red: 0.16, green: 0.50, blue: 0.98) : Color.primary.opacity(0.85))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                        .foregroundStyle(isSelected ? Color.blue : Color.primary)
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .stroke(isSelected ? Color.blue : Color.secondary.opacity(0.4), lineWidth: 1.5)
+                        .frame(width: 16, height: 16)
+                    if isSelected {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 8, height: 8)
+                    }
+                }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 78)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .circular)
-                    .fill(isSelected ? Color.blue.opacity(0.12) : Color.primary.opacity(0.04))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isSelected ? Color.blue.opacity(0.08) : Color.primary.opacity(0.025))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .circular)
-                    .stroke(isSelected ? Color(red: 0.16, green: 0.50, blue: 0.98) : Color.clear, lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(isSelected ? Color.blue.opacity(0.35) : Color.primary.opacity(0.05), lineWidth: 1)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .circular))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -426,75 +484,200 @@ struct SettingsWindowView: View {
     private func styleSilhouetteButton(id: String, title: String) -> some View {
         let isSelected = notchStyle == id
         return Button {
-            notchStyle = id
+            withAnimation(.easeInOut(duration: 0.2)) {
+                notchStyle = id
+            }
             NotchDynamicIslandController.shared.syncVisibility()
         } label: {
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 7, style: .circular)
-                        .fill(isSelected ? Color.blue.opacity(0.12) : Color.primary.opacity(0.06))
-                        .frame(height: 42)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isSelected ? Color.blue.opacity(0.12) : Color.primary.opacity(0.04))
+                        .frame(height: 52)
 
-                    HStack(spacing: 4) {
-                        Capsule().fill(Color.primary.opacity(0.25)).frame(width: 14, height: 4)
-                        Capsule().fill(Color.primary.opacity(0.18)).frame(width: 10, height: 4)
-                        Capsule().fill(Color.primary.opacity(0.18)).frame(width: 10, height: 4)
+                    VStack {
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.08))
+                            .frame(height: 10)
                         Spacer()
-                        Circle().fill(Color.primary.opacity(0.20)).frame(width: 4.5, height: 4.5)
-                        Circle().fill(Color.primary.opacity(0.20)).frame(width: 4.5, height: 4.5)
-                        Circle().fill(Color.primary.opacity(0.20)).frame(width: 4.5, height: 4.5)
                     }
-                    .padding(.horizontal, 10)
 
                     if id == "pill" {
                         Capsule(style: .continuous)
-                            .fill(Color.black)
-                            .frame(width: 52, height: 12)
+                            .fill(isSelected ? Color.blue : Color.primary.opacity(0.75))
+                            .frame(width: 50, height: 12)
+                            .padding(.top, 6)
+                            .shadow(color: isSelected ? Color.blue.opacity(0.4) : Color.black.opacity(0.2), radius: 3, y: 1)
                     } else {
                         NotchAttachedShape(topShoulder: 3.5, bottomRadius: 4.5)
-                            .fill(Color.black)
-                            .frame(width: 52, height: 14)
+                            .fill(isSelected ? Color.blue : Color.primary.opacity(0.75))
+                            .frame(width: 50, height: 14)
                             .frame(maxHeight: .infinity, alignment: .top)
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.top, 8)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                Text(title)
-                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? Color(red: 0.16, green: 0.50, blue: 0.98) : Color.primary.opacity(0.85))
-                    .padding(.bottom, 8)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(isSelected ? Color.blue : Color.secondary.opacity(0.4))
+                        .frame(width: 6, height: 6)
+
+                    Text(title)
+                        .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                        .foregroundStyle(isSelected ? Color.blue : Color.primary.opacity(0.85))
+                }
             }
             .frame(maxWidth: .infinity)
+            .padding(8)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .circular)
-                    .fill(isSelected ? Color.blue.opacity(0.08) : Color.primary.opacity(0.03))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isSelected ? Color.blue.opacity(0.06) : Color.primary.opacity(0.02))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .circular)
-                    .stroke(isSelected ? Color(red: 0.16, green: 0.50, blue: 0.98) : Color.clear, lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(isSelected ? Color.blue.opacity(0.4) : Color.primary.opacity(0.05), lineWidth: 1.2)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .circular))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
     }
 
+    private var capsulePreviewMockup: some View {
+        VStack(spacing: 6) {
+            ZStack(alignment: .top) {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.black.opacity(0.85), Color.black.opacity(0.95)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(height: 72)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
 
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(height: 12)
 
-    private func sliderSettingRow(title: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double) -> some View {
-        HStack(spacing: 12) {
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.9), Color.cyan.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(
+                        width: max(40, 110 + CGFloat(capsuleFitWidth) * 0.45),
+                        height: max(10, 18 + CGFloat(capsuleFitHeight) * 0.8)
+                    )
+                    .padding(.top, max(1, 4 + CGFloat(capsuleFitDrop) * 0.5))
+                    .overlay(
+                        HStack(spacing: 4) {
+                            Circle().fill(Color.white.opacity(0.8)).frame(width: 3.5, height: 3.5)
+                            Spacer()
+                            Image(systemName: "waveform")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundStyle(Color.white.opacity(0.9))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.top, max(1, 4 + CGFloat(capsuleFitDrop) * 0.5))
+                    )
+                    .shadow(color: Color.blue.opacity(0.4), radius: 6, x: 0, y: 2)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitWidth)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitHeight)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitDrop)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            HStack {
+                Text(l10n.string(vi: "Mô phỏng vị trí trực tiếp trên màn hình", en: "Live preview on display"))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if capsuleFitWidth != 0 || capsuleFitHeight != 0 || capsuleFitDrop != 0 {
+                    Button {
+                        withAnimation {
+                            capsuleFitWidth = 0
+                            capsuleFitHeight = 0
+                            capsuleFitDrop = 0
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 9, weight: .bold))
+                            Text(l10n.string(vi: "Đặt lại về 0", en: "Reset to 0"))
+                                .font(.system(size: 10.5, weight: .medium))
+                        }
+                        .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func sliderSettingRow(
+        icon: String,
+        title: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        step: Double,
+        unit: String = "px"
+    ) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+
             Text(title)
-                .font(.system(size: 12.5))
+                .font(.system(size: 12.5, weight: .regular))
                 .foregroundStyle(.primary)
-                .frame(width: 150, alignment: .leading)
+                .frame(width: 140, alignment: .leading)
+
+            Button {
+                value.wrappedValue = max(range.lowerBound, value.wrappedValue - step)
+            } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(Color.primary.opacity(0.06)))
+            }
+            .buttonStyle(.plain)
 
             Slider(value: value, in: range, step: step)
                 .controlSize(.small)
 
-            Text("\(Int(value.wrappedValue))")
-                .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.primary)
-                .frame(width: 32, alignment: .trailing)
+            Button {
+                value.wrappedValue = min(range.upperBound, value.wrappedValue + step)
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(Color.primary.opacity(0.06)))
+            }
+            .buttonStyle(.plain)
+
+            let intVal = Int(value.wrappedValue)
+            Text("\(intVal > 0 ? "+" : "")\(intVal) \(unit)")
+                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                .foregroundStyle(intVal == 0 ? Color.secondary : Color.blue)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(intVal == 0 ? Color.primary.opacity(0.05) : Color.blue.opacity(0.12))
+                )
+                .frame(width: 58, alignment: .trailing)
         }
     }
 
