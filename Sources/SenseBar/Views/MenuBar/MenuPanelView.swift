@@ -826,7 +826,7 @@ struct MenuPanelView: View {
 
             Spacer()
 
-            Text("v1.0.0")
+            Text("v\(AppInfo.version)")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.tertiary)
 

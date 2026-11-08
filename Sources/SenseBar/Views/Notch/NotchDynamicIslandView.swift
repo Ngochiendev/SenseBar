@@ -217,10 +217,10 @@ struct NotchDynamicIslandView: View {
                                     )
                                 )
                         } else {
-                            notchShape.fill(Color.black)
+                            classicGlassBackground(notchShape)
                         }
                         #else
-                        notchShape.fill(Color.black)
+                        classicGlassBackground(notchShape)
                         #endif
                     } else {
                         notchShape.fill(Color.black)

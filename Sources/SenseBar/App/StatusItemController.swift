@@ -37,6 +37,8 @@ final class StatusItemController: NSObject {
             }
         )
         let host = NSHostingController(rootView: panelView)
+        host.view.wantsLayer = true
+        host.view.layer?.backgroundColor = NSColor.clear.cgColor
         if #available(macOS 13.0, *) {
             host.sizingOptions = .preferredContentSize
         }

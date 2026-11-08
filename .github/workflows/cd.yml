@@ -26,22 +26,10 @@ jobs:
           VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
           TAG="v${VERSION}"
 
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            TAG_EXISTS="true"
-          else
-            TAG_EXISTS="false"
-          fi
-
-          if [[ "$TAG_EXISTS" == "false" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            SHOULD_RELEASE="true"
-          else
-            SHOULD_RELEASE="false"
-          fi
-
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "should_release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
-          echo "▸ Target Version: $VERSION -> Tag: $TAG (Release: $SHOULD_RELEASE)"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "▸ Target Version: $VERSION -> Tag: $TAG (Release: true)"
 
       - name: Nhập chứng chỉ Apple Developer ID
         if: ${{ env.APPLE_CERTIFICATE_BASE64 != '' }}

@@ -83,7 +83,7 @@ enum SenseAppFullscreen {
         return window.insetBy(dx: -1, dy: -1).contains(display)
     }
 
-    private static var confirmed = Set<CGWindowID>()
+    private static nonisolated(unsafe) var confirmed = Set<CGWindowID>()
 
     static func coveredDisplays() -> Set<CGDirectDisplayID> {
         let ownPID = ProcessInfo.processInfo.processIdentifier

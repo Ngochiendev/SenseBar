@@ -12,10 +12,10 @@ private typealias IsPlayingFunction = @convention(c) (DispatchQueue, @escaping I
 private typealias SendCommandFunction = @convention(c) (Int32, CFDictionary?) -> Bool
 
 private let maximumArtworkBytes = 8 * 1_024 * 1_024
-private var watching = false
-private var previousArtwork: Data?
-private var previousTitle: String?
-private var previousArtist: String?
+private nonisolated(unsafe) var watching = false
+private nonisolated(unsafe) var previousArtwork: Data?
+private nonisolated(unsafe) var previousTitle: String?
+private nonisolated(unsafe) var previousArtist: String?
 private let emissionLock = NSLock()
 
 private func resolveSymbol<T>(_ handle: UnsafeMutableRawPointer?, _ name: String, as type: T.Type) -> T? {
@@ -170,10 +170,10 @@ public func sensebarNowPlayingWatch() {
     register(.main)
 
     let worker = DispatchQueue(label: "com.ngochiendev.sensebar.nowplaying.watch")
-    var pendingWork: DispatchWorkItem?
-    var followUpWork: DispatchWorkItem?
+    nonisolated(unsafe) var pendingWork: DispatchWorkItem?
+    nonisolated(unsafe) var followUpWork: DispatchWorkItem?
 
-    func scheduleRefresh(delay: TimeInterval = 0.08) {
+    @Sendable func scheduleRefresh(delay: TimeInterval = 0.08) {
         pendingWork?.cancel()
         followUpWork?.cancel()
 
@@ -228,6 +228,7 @@ public func sensebarNowPlayingWatch() {
         scheduleRefresh()
     }
 
+    nonisolated(unsafe) let commandHandle = handle
     var inputBuffer = Data()
     FileHandle.standardInput.readabilityHandler = { input in
         let chunk = input.availableData
@@ -240,7 +241,7 @@ public func sensebarNowPlayingWatch() {
                 if let line = String(data: lineData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                    !line.isEmpty {
                     worker.async {
-                        handleCommand(line, handle: handle)
+                        handleCommand(line, handle: commandHandle)
                         scheduleRefresh(delay: 0.14)
                     }
                 }
