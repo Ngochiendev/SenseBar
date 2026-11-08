@@ -83,17 +83,6 @@ final class NotchDynamicIslandController: ObservableObject {
         }
     }
 
-    isolated deinit {
-        fullscreenTimer?.invalidate()
-        fullscreenTimer = nil
-        if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
-        if let localMouseMonitor { NSEvent.removeMonitor(localMouseMonitor) }
-        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
-        if let defaultsObserver { NotificationCenter.default.removeObserver(defaultsObserver) }
-        if let spaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver) }
-        if let appActivationObserver { NSWorkspace.shared.notificationCenter.removeObserver(appActivationObserver) }
-    }
-
     private func registerDefaultPreferences() {
         let defaults = UserDefaults.standard
         if defaults.object(forKey: DefaultsKey.notchStyle) == nil {

@@ -62,10 +62,6 @@ final class AudioStudioService: ObservableObject {
         workspaceObservers = [launchObs, termObs]
     }
 
-    isolated deinit {
-        workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
-    }
-
     func refreshAll() {
         refreshAudioDevices()
         refreshSystemVolume()

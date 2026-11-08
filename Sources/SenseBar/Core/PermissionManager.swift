@@ -31,13 +31,6 @@ final class PermissionManager: ObservableObject {
         }
     }
 
-    isolated deinit {
-        pollTimer?.invalidate()
-        if let appActiveObserver {
-            NotificationCenter.default.removeObserver(appActiveObserver)
-        }
-    }
-
     var allRequiredGranted: Bool {
         accessibilityGranted
     }

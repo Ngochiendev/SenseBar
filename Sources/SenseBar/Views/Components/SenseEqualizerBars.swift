@@ -9,7 +9,7 @@ final class SenseDecorativeClock {
     static let rate: Float = 30
 
     private let step: (CFTimeInterval) -> Void
-    private var link: CADisplayLink?
+    private nonisolated(unsafe) var link: CADisplayLink?
 
     init(step: @escaping (CFTimeInterval) -> Void) {
         self.step = step
@@ -35,7 +35,7 @@ final class SenseDecorativeClock {
         link = nil
     }
 
-    isolated deinit {
+    deinit {
         link?.invalidate()
     }
 
