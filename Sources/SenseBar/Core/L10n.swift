@@ -163,12 +163,12 @@ final class L10n: ObservableObject {
     }
 
     private init() {
+        UserDefaults.standard.register(defaults: [DefaultsKey.language: AppLanguage.vi.rawValue])
         if let raw = UserDefaults.standard.string(forKey: DefaultsKey.language),
            let saved = AppLanguage(rawValue: raw) {
             language = saved
         } else {
             language = .vi
-            UserDefaults.standard.set(AppLanguage.vi.rawValue, forKey: DefaultsKey.language)
         }
     }
 }

@@ -59,7 +59,7 @@ final class NotchDynamicIslandController: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
+            DispatchQueue.main.async {
                 self?.syncVisibility()
             }
         }
@@ -84,25 +84,18 @@ final class NotchDynamicIslandController: ObservableObject {
     }
 
     private func registerDefaultPreferences() {
-        let defaults = UserDefaults.standard
-        if defaults.object(forKey: DefaultsKey.notchStyle) == nil {
-            defaults.set("notch", forKey: DefaultsKey.notchStyle)
-        }
-        if defaults.object(forKey: DefaultsKey.notchExpandOnHover) == nil {
-            defaults.set(true, forKey: DefaultsKey.notchExpandOnHover)
-        }
-        if defaults.object(forKey: DefaultsKey.notchShowVisualizer) == nil {
-            defaults.set(true, forKey: DefaultsKey.notchShowVisualizer)
-        }
-        if defaults.object(forKey: DefaultsKey.notchHideInFullscreen) == nil {
-            defaults.set(false, forKey: DefaultsKey.notchHideInFullscreen)
-        }
-        if defaults.object(forKey: DefaultsKey.notchDisplayTarget) == nil {
-            defaults.set("automatic", forKey: DefaultsKey.notchDisplayTarget)
-        }
-        if defaults.object(forKey: DefaultsKey.notchExpandAllDisplays) == nil {
-            defaults.set(false, forKey: DefaultsKey.notchExpandAllDisplays)
-        }
+        UserDefaults.standard.register(defaults: [
+            DefaultsKey.notchStyle: "notch",
+            DefaultsKey.notchExpandOnHover: true,
+            DefaultsKey.notchShowVisualizer: true,
+            DefaultsKey.notchHideInFullscreen: false,
+            DefaultsKey.notchDisplayTarget: "automatic",
+            DefaultsKey.notchExpandAllDisplays: false,
+            DefaultsKey.pillarDynamicIslandEnabled: true,
+            DefaultsKey.pillarAudioStudioEnabled: true,
+            DefaultsKey.liquidGlassEnabled: true,
+            DefaultsKey.liquidGlassIslandEnabled: true
+        ])
     }
 
     var targetScreenForActivePanel: NSScreen {
