@@ -399,16 +399,11 @@ struct MenuPanelView: View {
                             Group {
                                 if isPill {
                                     HStack(spacing: 5) {
-                                        previewAlbumBadge(size: 13, cornerRadius: 3.5)
-                                        HStack(spacing: 3) {
-                                            Image(systemName: "headphones")
-                                                .font(.system(size: 7.5, weight: .semibold))
-                                                .foregroundStyle(.white.opacity(0.85))
-                                            Text(music.track?.title ?? "Midnight City — M83")
-                                                .font(.system(size: 8.5, weight: .semibold))
-                                                .foregroundStyle(.white)
-                                                .lineLimit(1)
-                                        }
+                                        previewAlbumBadge(size: 11, isCircle: true)
+                                        Text(music.track?.title ?? "Midnight City — M83")
+                                            .font(.system(size: 8.5, weight: .semibold))
+                                            .foregroundStyle(.white)
+                                            .lineLimit(1)
                                         Spacer(minLength: 3)
                                         if showVisualizer {
                                             SenseEqualizerBars(
@@ -424,7 +419,9 @@ struct MenuPanelView: View {
                                                 .foregroundStyle(music.accentColor)
                                         }
                                     }
-                                    .padding(.horizontal, 6)
+                                    .padding(.leading, 4.5)
+                                    .padding(.trailing, 6)
+                                    .offset(y: -0.8)
                                 } else {
                                     HStack(spacing: 0) {
                                         previewAlbumBadge(size: 13, cornerRadius: 3.8)
@@ -577,30 +574,27 @@ struct MenuPanelView: View {
     }
 
     @ViewBuilder
-    private func previewAlbumBadge(size: CGFloat, cornerRadius: CGFloat) -> some View {
-        if let artwork = music.artwork {
-            Image(nsImage: artwork)
-                .resizable()
-                .interpolation(.high)
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        } else {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [.blue, .purple],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+    private func previewAlbumBadge(size: CGFloat, isCircle: Bool = false, cornerRadius: CGFloat = 3.8) -> some View {
+        let radius = isCircle ? size / 2 : cornerRadius
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+
+        Group {
+            if let artwork = music.artwork {
+                Image(nsImage: artwork)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFill()
+            } else {
+                LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .overlay(
+                        Image(systemName: "music.note")
+                            .font(.system(size: size * 0.45, weight: .bold))
+                            .foregroundStyle(.white)
                     )
-                )
-                .frame(width: size, height: size)
-                .overlay(
-                    Image(systemName: "music.note")
-                        .font(.system(size: size * 0.45, weight: .bold))
-                        .foregroundStyle(.white)
-                )
+            }
         }
+        .frame(width: size, height: size)
+        .clipShape(shape)
     }
 
     private func styleOptionButton(id: String, icon: String, title: String) -> some View {

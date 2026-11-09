@@ -335,23 +335,18 @@ struct NotchDynamicIslandView: View {
     @ViewBuilder
     private func compactContent(size: CGSize, isPill: Bool, geo: SenseScreenGeometry) -> some View {
         if isPill {
-            // Hiển thị dạng Capsule nổi trong Menu Bar
-            let coverSize: CGFloat = max(14, size.height - 4)
-            HStack(spacing: 6) {
-                // Ảnh đĩa / bài hát
-                albumCoverView(size: coverSize, cornerRadius: 4.5)
+            // Hiển thị dạng Capsule nổi trong Menu Bar:
+            // Để hở đều trên và dưới (khoảng 3.5 - 4pt), lề 2 đầu 8pt ôm theo độ cong viên nang
+            let coverSize: CGFloat = max(12, size.height - 7)
+            HStack(spacing: 7) {
+                // Ảnh đĩa / bài hát dạng tròn vinyl có khoảng đệm thoáng đãng
+                albumCoverView(size: coverSize, isCircle: true)
 
-                // Biểu tượng tai nghe và tên bài hát đang phát
-                HStack(spacing: 4) {
-                    Image(systemName: "headphones")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
-
-                    Text(activeTrack.title)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                }
+                // Tên bài hát đang phát
+                Text(activeTrack.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
 
                 Spacer(minLength: 4)
 
@@ -361,7 +356,7 @@ struct NotchDynamicIslandView: View {
                         isPlaying: activeTrack.isPlaying,
                         bars: 4,
                         barWidth: 1.8,
-                        height: 10,
+                        height: max(8, size.height - 13),
                         tint: music.accentColor
                     )
                 } else {
@@ -370,7 +365,9 @@ struct NotchDynamicIslandView: View {
                         .foregroundStyle(music.accentColor)
                 }
             }
-            .padding(.horizontal, 6)
+            .padding(.leading, 5)
+            .padding(.trailing, 8)
+            .offset(y: -1.0)
             .frame(width: size.width, height: size.height)
         } else {
             // Hiển thị ôm sát phần cứng Tai thỏ (Notch Wings)
@@ -619,37 +616,35 @@ struct NotchDynamicIslandView: View {
     }
 
     @ViewBuilder
-    private func albumCoverView(size: CGFloat, cornerRadius: CGFloat) -> some View {
-        if let artwork = music.artwork {
-            Image(nsImage: artwork)
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fill)
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.6)
+    private func albumCoverView(size: CGFloat, isCircle: Bool = false, cornerRadius: CGFloat = 4.5) -> some View {
+        let radius = isCircle ? size / 2 : cornerRadius
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+
+        Group {
+            if let artwork = music.artwork {
+                Image(nsImage: artwork)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.30, green: 0.42, blue: 0.95),
+                        Color(red: 0.62, green: 0.28, blue: 0.88)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-        } else {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.30, green: 0.42, blue: 0.95),
-                            Color(red: 0.62, green: 0.28, blue: 0.88)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: size, height: size)
                 .overlay(
                     Image(systemName: "music.note")
                         .font(.system(size: size * 0.44, weight: .bold))
                         .foregroundStyle(.white)
                 )
+            }
         }
+        .frame(width: size, height: size)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(Color.white.opacity(isCircle ? 0.18 : 0.16), lineWidth: 0.6))
     }
 }
 
