@@ -152,14 +152,6 @@ final class NotchDynamicIslandController: ObservableObject {
         }
     }
 
-    var currentGeometry: SenseScreenGeometry {
-        geometry()
-    }
-
-    var currentIslandSize: CGSize {
-        islandSize()
-    }
-
     /// Khởi động hệ thống Dynamic Island, lắng nghe sự kiện chuột, nhạc và màn hình.
     func start() {
         _ = NotchMusicService.shared

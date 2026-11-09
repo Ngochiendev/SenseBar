@@ -29,7 +29,6 @@ enum DefaultsKey {
 
     // Cập nhật phiên bản
     static let autoCheckUpdates = "sensebar.updates.autoCheck"
-    static let lastUpdateCheckTime = "sensebar.updates.lastCheckTime"
 }
 
 enum LaunchAtLoginManager {

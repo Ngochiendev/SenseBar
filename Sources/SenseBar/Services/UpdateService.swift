@@ -104,7 +104,6 @@ final class UpdateService: ObservableObject {
 
                 let cleanVersion = Self.normalizeVersion(payload.tagName)
                 let currentVersion = Self.normalizeVersion(AppInfo.version)
-                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: DefaultsKey.lastUpdateCheckTime)
 
                 if Self.isNewerVersion(cleanVersion, than: currentVersion),
                    let htmlURL = URL(string: payload.htmlURL) {

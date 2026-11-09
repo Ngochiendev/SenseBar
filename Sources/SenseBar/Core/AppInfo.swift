@@ -3,7 +3,6 @@ import Foundation
 enum AppInfo {
     static let name = "SenseBar"
     static let author = "Ngochiendev"
-    static let repoSlug = "Ngochiendev/SenseBar"
     static let repositoryURL = URL(string: "https://github.com/Ngochiendev/SenseBar")!
     static let releasesURL = URL(string: "https://github.com/Ngochiendev/SenseBar/releases")!
     static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/Ngochiendev/SenseBar/releases/latest")!
