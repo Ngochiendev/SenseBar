@@ -15,7 +15,7 @@ struct PopoverSettingsView: View {
     @AppStorage(DefaultsKey.notchDisplayTarget) private var displayTarget: String = "automatic"
     @AppStorage(DefaultsKey.notchExpandAllDisplays) private var expandAllDisplays: Bool = false
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
-    @AppStorage(DefaultsKey.notchHideInFullscreen) private var hideInFullscreen: Bool = false
+    @AppStorage(DefaultsKey.notchHideInFullscreen) private var hideInFullscreen: Bool = true
     @AppStorage(DefaultsKey.notchCapsuleFitWidth) private var capsuleFitWidth: Double = 0
     @AppStorage(DefaultsKey.notchCapsuleFitHeight) private var capsuleFitHeight: Double = 0
     @AppStorage(DefaultsKey.notchCapsuleFitDrop) private var capsuleFitDrop: Double = 0

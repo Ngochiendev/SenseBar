@@ -88,7 +88,7 @@ final class NotchDynamicIslandController: ObservableObject {
             DefaultsKey.notchStyle: "notch",
             DefaultsKey.notchExpandOnHover: true,
             DefaultsKey.notchShowVisualizer: true,
-            DefaultsKey.notchHideInFullscreen: false,
+            DefaultsKey.notchHideInFullscreen: true,
             DefaultsKey.notchDisplayTarget: "automatic",
             DefaultsKey.notchExpandAllDisplays: false,
             DefaultsKey.pillarDynamicIslandEnabled: true,
