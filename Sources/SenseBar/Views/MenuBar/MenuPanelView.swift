@@ -33,6 +33,7 @@ struct MenuPanelView: View {
     @ObservedObject private var islandController = NotchDynamicIslandController.shared
     @ObservedObject private var music = NotchMusicService.shared
     @ObservedObject private var audio = AudioStudioService.shared
+    @ObservedObject private var updateService = UpdateService.shared
 
     @AppStorage(DefaultsKey.selectedPopoverTab) private var selectedModeRaw: String = PopoverMode.dynamicIsland.rawValue
     @AppStorage(DefaultsKey.pillarDynamicIslandEnabled) private var dynamicIslandEnabled: Bool = true
@@ -41,6 +42,11 @@ struct MenuPanelView: View {
     @AppStorage(DefaultsKey.notchShowVisualizer) private var showVisualizer: Bool = true
     @State private var showingSettings: Bool = false
     @Namespace private var modeAnimation
+
+    /// Capsule chỉ có hiệu lực khi có màn hình không tai thỏ, ngược lại luôn là Notch.
+    private var showsCapsule: Bool {
+        notchStyle == "pill" && islandController.canChooseStyle
+    }
 
     private var selectedMode: PopoverMode {
         PopoverMode(rawValue: selectedModeRaw) ?? .dynamicIsland
@@ -247,21 +253,37 @@ struct MenuPanelView: View {
                 Text(l10n.string(vi: "Tùy chỉnh Dynamic Island", en: "Dynamic Island Controls"))
                     .font(.system(size: 12, weight: .bold))
 
-                // Chọn kiểu dáng: Ôm sát Tai thỏ vs Viên nang nổi
-                HStack(spacing: 6) {
-                    styleOptionButton(
-                        id: "notch",
-                        icon: "macbook",
-                        title: l10n.string(vi: "Ôm sát Tai thỏ", en: "Notch Cutout")
-                    )
-                    styleOptionButton(
-                        id: "pill",
-                        icon: "capsule.fill",
-                        title: l10n.string(vi: "Viên nang nổi", en: "Floating Pill")
-                    )
-                }
+                // Chọn kiểu dáng: chỉ hiện khi có màn hình không tai thỏ
+                if islandController.canChooseStyle {
+                    HStack(spacing: 6) {
+                        styleOptionButton(
+                            id: "notch",
+                            icon: "macbook",
+                            title: l10n.string(vi: "Ôm sát Tai thỏ", en: "Notch Cutout")
+                        )
+                        styleOptionButton(
+                            id: "pill",
+                            icon: "capsule.fill",
+                            title: l10n.string(vi: "Viên nang nổi", en: "Floating Pill")
+                        )
+                    }
+                    .transition(.opacity)
 
-                Divider().opacity(0.5)
+                    if islandController.hasNotchedDisplay {
+                        Label(
+                            l10n.string(
+                                vi: "Màn hình MacBook có tai thỏ luôn dùng kiểu Notch.",
+                                en: "Notched MacBook displays always use the Notch style."
+                            ),
+                            systemImage: "info.circle.fill"
+                        )
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
+                    }
+
+                    Divider().opacity(0.5)
+                }
 
                 compactToggleRow(
                     icon: "cursorarrow.motionlines",
@@ -276,6 +298,7 @@ struct MenuPanelView: View {
                 )
             }
             .panelCard()
+            .animation(.easeInOut(duration: 0.25), value: islandController.canChooseStyle)
         }
     }
 
@@ -291,7 +314,7 @@ struct MenuPanelView: View {
 
                 Spacer()
 
-                Text(notchStyle == "pill"
+                Text(showsCapsule
                      ? l10n.string(vi: "Kiểu Viên nang", en: "Pill Style")
                      : l10n.string(vi: "Kiểu Tai thỏ", en: "Notch Style"))
                     .font(.system(size: 10, weight: .medium))
@@ -306,7 +329,7 @@ struct MenuPanelView: View {
                 let cycle = timeline.date.timeIntervalSinceReferenceDate
                     .truncatingRemainder(dividingBy: 4.2) / 4.2
                 let exp = previewExpansionProgress(for: cycle)
-                let isPill = (notchStyle == "pill")
+                let isPill = showsCapsule
                 let compactW: CGFloat = isPill ? 162 : 148
                 let compactH: CGFloat = isPill ? 18 : 22
                 let expandedW: CGFloat = 248
@@ -832,9 +855,33 @@ struct MenuPanelView: View {
 
             Spacer()
 
-            Text("v\(AppInfo.version)")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.tertiary)
+            if let release = updateService.availableRelease {
+                Button {
+                    updateService.openDownloadPage()
+                } label: {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 5.5, height: 5.5)
+                        Text(l10n.string(vi: "v\(release.version) mới", en: "v\(release.version) new"))
+                            .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundStyle(Color.blue)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3.5)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.blue.opacity(0.12))
+                    )
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text("v\(AppInfo.version)")
+                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
 
             Spacer()
 

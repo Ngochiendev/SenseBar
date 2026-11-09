@@ -26,6 +26,10 @@ enum DefaultsKey {
     // Liquid Glass (macOS 26+)
     static let liquidGlassEnabled = "sensebar.liquidGlassEnabled"
     static let liquidGlassIslandEnabled = "sensebar.liquidGlassIslandEnabled"
+
+    // Cập nhật phiên bản
+    static let autoCheckUpdates = "sensebar.updates.autoCheck"
+    static let lastUpdateCheckTime = "sensebar.updates.lastCheckTime"
 }
 
 enum LaunchAtLoginManager {

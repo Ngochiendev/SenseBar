@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         BrandIconResources.applyApplicationIcon()
         NotchDynamicIslandController.shared.start()
+        UpdateService.shared.start()
 
         statusItemController = StatusItemController(
             onOpenWelcome: { [weak self] in

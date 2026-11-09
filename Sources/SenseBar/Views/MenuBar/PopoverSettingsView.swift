@@ -9,6 +9,7 @@ struct PopoverSettingsView: View {
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var permissions = PermissionManager.shared
     @ObservedObject private var islandController = NotchDynamicIslandController.shared
+    @ObservedObject private var updateService = UpdateService.shared
 
     @AppStorage(DefaultsKey.pillarDynamicIslandEnabled) private var dynamicIslandEnabled: Bool = true
     @AppStorage(DefaultsKey.pillarAudioStudioEnabled) private var audioStudioEnabled: Bool = true
@@ -21,7 +22,13 @@ struct PopoverSettingsView: View {
     @AppStorage(DefaultsKey.notchCapsuleFitDrop) private var capsuleFitDrop: Double = 0
     @AppStorage(DefaultsKey.liquidGlassEnabled) private var liquidGlassOtherWindows: Bool = true
     @AppStorage(DefaultsKey.liquidGlassIslandEnabled) private var liquidGlassIsland: Bool = true
+    @AppStorage(DefaultsKey.autoCheckUpdates) private var autoCheckUpdates: Bool = true
     @State private var launchAtLogin: Bool = LaunchAtLoginManager.isEnabled
+
+    /// Capsule chỉ có hiệu lực khi có màn hình không tai thỏ, ngược lại luôn là Notch.
+    private var showsCapsule: Bool {
+        notchStyle == "pill" && islandController.canChooseStyle
+    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -33,7 +40,10 @@ struct PopoverSettingsView: View {
 
                     displayTargetCard
 
-                    notchStyleCard
+                    if islandController.canChooseStyle {
+                        notchStyleCard
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
 
                     fitAdjustmentCard
 
@@ -42,6 +52,7 @@ struct PopoverSettingsView: View {
                     permissionsAndAboutCard
                 }
                 .padding(.vertical, 2)
+                .animation(.easeInOut(duration: 0.25), value: islandController.canChooseStyle)
             }
             .frame(maxHeight: 450)
 
@@ -52,35 +63,28 @@ struct PopoverSettingsView: View {
     // MARK: - Header Bar
 
     private var headerBar: some View {
-        HStack(spacing: 8) {
-            Button(action: onBack) {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 11, weight: .bold))
-                    Text(l10n.string(vi: "Quay lại", en: "Back"))
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundStyle(Color.blue)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.blue.opacity(0.1), in: Capsule())
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
+        ZStack {
             Text(l10n.string(vi: "Cài đặt", en: "Settings"))
                 .font(.system(size: 13.5, weight: .bold))
                 .foregroundStyle(.primary)
 
-            Spacer()
+            HStack {
+                Button(action: onBack) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .bold))
+                        Text(l10n.string(vi: "Quay lại", en: "Back"))
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(Color.blue)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.1), in: Capsule())
+                }
+                .buttonStyle(.plain)
 
-            Text("v\(AppInfo.version)")
-                .font(.system(size: 10.5, weight: .medium).monospacedDigit())
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.primary.opacity(0.05), in: Capsule())
+                Spacer()
+            }
         }
         .padding(.horizontal, 2)
         .padding(.bottom, 2)
@@ -325,8 +329,34 @@ struct PopoverSettingsView: View {
                 styleSilhouetteButton(id: "pill", title: l10n.string(vi: "Capsule", en: "Capsule"))
                 styleSilhouetteButton(id: "notch", title: l10n.string(vi: "Notch", en: "Notch"))
             }
+
+            if islandController.hasNotchedDisplay {
+                notchedDisplayNote
+            }
         }
         .panelCard()
+    }
+
+    /// Lưu ý: màn hình có tai thỏ thật luôn dùng Notch, lựa chọn trên chỉ áp dụng cho màn hình rời.
+    private var notchedDisplayNote: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.blue)
+            Text(l10n.string(
+                vi: "Màn hình MacBook có tai thỏ luôn dùng kiểu Notch để ôm sát camera. Lựa chọn trên chỉ áp dụng cho màn hình không có tai thỏ.",
+                en: "Notched MacBook displays always use the Notch style to fit the camera. This choice applies only to displays without a notch."
+            ))
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.blue.opacity(0.07))
+        )
     }
 
     private func styleSilhouetteButton(id: String, title: String) -> some View {
@@ -404,7 +434,7 @@ struct PopoverSettingsView: View {
     // MARK: - Căn chỉnh kích thước
 
     private var fitAdjustmentCard: some View {
-        let isPill = notchStyle == "pill"
+        let isPill = showsCapsule
         let fitTitle = isPill
             ? l10n.string(vi: "Căn chỉnh kích thước (Capsule fit)", en: "Capsule fit")
             : l10n.string(vi: "Căn chỉnh kích thước (Notch fit)", en: "Notch fit")
@@ -448,7 +478,7 @@ struct PopoverSettingsView: View {
     }
 
     private var screenMenuPreviewMockup: some View {
-        let isPill = notchStyle == "pill"
+        let isPill = showsCapsule
         return VStack(spacing: 6) {
             ZStack(alignment: .top) {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -726,8 +756,13 @@ struct PopoverSettingsView: View {
                             .foregroundStyle(.primary)
 
                         Text("v\(AppInfo.version)")
-                            .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 9.5, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(.primary.opacity(0.75))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(
+                                Capsule().fill(Color.primary.opacity(0.08))
+                            )
                     }
 
                     HStack(spacing: 4) {
@@ -776,8 +811,139 @@ struct PopoverSettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            Divider().opacity(0.4)
+
+            updateSectionView
         }
         .panelCard()
+    }
+
+    @ViewBuilder
+    private var updateSectionView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let release = updateService.availableRelease {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.blue)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(l10n.string(
+                            vi: "Có bản mới v\(release.version)",
+                            en: "Update v\(release.version) available"
+                        ))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.primary)
+
+                        Button {
+                            updateService.openReleaseNotes()
+                        } label: {
+                            Text(l10n.string(vi: "Xem thay đổi →", en: "Release notes →"))
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundStyle(.blue)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        updateService.openDownloadPage()
+                    } label: {
+                        Text(l10n.string(vi: "Tải về", en: "Download"))
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(Color.blue, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.blue.opacity(0.09))
+                )
+            } else {
+                HStack(spacing: 8) {
+                    updateStatusLabel
+
+                    Spacer()
+
+                    Button {
+                        updateService.checkForUpdates(manual: true)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 9.5, weight: .semibold))
+                            Text(l10n.string(vi: "Kiểm tra cập nhật", en: "Check for Updates"))
+                                .font(.system(size: 10.5, weight: .medium))
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(updateService.status == .checking)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Text(l10n.string(vi: "Tự động kiểm tra cập nhật", en: "Automatically check for updates"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Toggle("", isOn: $autoCheckUpdates)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var updateStatusLabel: some View {
+        switch updateService.status {
+        case .checking:
+            HStack(spacing: 5) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text(l10n.string(vi: "Đang kiểm tra...", en: "Checking..."))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+        case .upToDate:
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.green)
+                Text(l10n.string(vi: "Đã là bản mới nhất", en: "Up to date"))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+        case .failed:
+            HStack(spacing: 4) {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.orange)
+                Text(l10n.string(vi: "Không thể kết nối", en: "Could not reach"))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+        case .idle, .updateAvailable:
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.tertiary)
+                Text("v\(AppInfo.version)")
+                    .font(.system(size: 10.5).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+        }
     }
 
     // MARK: - Footer Bar

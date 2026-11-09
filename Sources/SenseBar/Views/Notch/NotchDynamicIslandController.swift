@@ -27,6 +27,10 @@ final class NotchDynamicIslandController: ObservableObject {
     @Published private(set) var isExpanded: Bool = false
     @Published private(set) var cameraCutoutWidth: CGFloat = 184
     @Published private(set) var cameraCutoutHeight: CGFloat = 32
+    /// `true` khi có ít nhất một màn hình không tai thỏ có thể hiển thị Island.
+    @Published private(set) var canChooseStyle: Bool = false
+    /// `true` khi đang có màn hình tai thỏ vật lý được kết nối (vd. MacBook).
+    @Published private(set) var hasNotchedDisplay: Bool = false
 
     // Quản lý cửa sổ chính (Active Window) và các cửa sổ phụ trên đa màn hình (Mirror Panels)
     private var mainPanel: SenseNotchPanel?
@@ -45,6 +49,7 @@ final class NotchDynamicIslandController: ObservableObject {
 
     private init() {
         registerDefaultPreferences()
+        refreshStyleAvailability()
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
@@ -113,14 +118,38 @@ final class NotchDynamicIslandController: ObservableObject {
         if expanded ?? isExpanded {
             return geo.expandedSize
         }
-        let isPill = UserDefaults.standard.string(forKey: DefaultsKey.notchStyle) == "pill"
         let fitWidth = UserDefaults.standard.double(forKey: DefaultsKey.notchCapsuleFitWidth)
         let fitHeight = UserDefaults.standard.double(forKey: DefaultsKey.notchCapsuleFitHeight)
 
-        if isPill {
+        if usesCapsule(on: screen) {
             return geo.compactCapsuleSize(customWidth: fitWidth, customHeight: fitHeight)
         }
         return geo.compactNotchSize(customWidth: fitWidth, customHeight: fitHeight)
+    }
+
+    // MARK: - Kiểu dáng theo phần cứng
+
+    /// Capsule chỉ áp dụng cho màn hình không có tai thỏ.
+    /// Màn hình có tai thỏ vật lý luôn dùng Notch để không vẽ đè lên camera.
+    func usesCapsule(on screen: NSScreen? = nil) -> Bool {
+        let prefersCapsule = UserDefaults.standard.string(forKey: DefaultsKey.notchStyle) == "pill"
+        return prefersCapsule && !geometry(for: screen).isNotched
+    }
+
+    /// Chỉ hiện bộ chọn Capsule / Notch khi Island có thể xuất hiện trên màn hình không tai thỏ.
+    private func refreshStyleAvailability() {
+        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
+        let candidates: [NSScreen] = (mode == "pointer" || mode == "all")
+            ? NSScreen.screens
+            : [targetScreen(for: mode)].compactMap { $0 }
+        let available = candidates.contains { !SenseScreenGeometry(for: $0).isNotched }
+        if canChooseStyle != available {
+            canChooseStyle = available
+        }
+        let notched = NSScreen.screens.contains { SenseScreenGeometry(for: $0).isNotched }
+        if hasNotchedDisplay != notched {
+            hasNotchedDisplay = notched
+        }
     }
 
     var currentGeometry: SenseScreenGeometry {
@@ -243,6 +272,7 @@ final class NotchDynamicIslandController: ObservableObject {
     }
 
     func syncAllDisplays() {
+        refreshStyleAvailability()
         guard SensePillar.dynamicIsland.isEnabled() else { return }
         setupPanelIfNeeded()
 
@@ -445,9 +475,8 @@ final class NotchDynamicIslandController: ObservableObject {
         let screen = mainPanel.screen ?? targetScreenForActivePanel
         let size = islandSize(for: screen)
         let geo = geometry(for: screen)
-        let isPill = (UserDefaults.standard.string(forKey: DefaultsKey.notchStyle) == "pill")
         let drop = UserDefaults.standard.double(forKey: DefaultsKey.notchCapsuleFitDrop)
-        let topOffset = isPill ? (geo.capsuleVerticalCenterOffset + CGFloat(drop)) : 0
+        let topOffset = usesCapsule(on: screen) ? (geo.capsuleVerticalCenterOffset + CGFloat(drop)) : 0
         let x = mainPanel.frame.midX - size.width / 2
         let y = mainPanel.frame.maxY - topOffset - size.height
         return NSRect(x: x, y: y, width: size.width, height: size.height)
@@ -468,9 +497,7 @@ final class NotchDynamicIslandController: ObservableObject {
         )
 
         let geo = geometry(for: screen)
-        let isPill = (UserDefaults.standard.string(forKey: DefaultsKey.notchStyle) == "pill")
-
-        if isPill {
+        if usesCapsule(on: screen) {
             // Khi đang thu gọn, lùi vào 1.5pt để con trỏ phải thực sự chạm vào thân đen của Capsule
             let inset: CGFloat = isExpanded ? 0.0 : 1.5
             let bodyRect = CGRect(

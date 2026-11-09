@@ -67,8 +67,9 @@ struct NotchDynamicIslandView: View {
     @AppStorage(DefaultsKey.liquidGlassIslandEnabled) private var liquidGlassIsland: Bool = true
     @AppStorage(DefaultsKey.notchExpandAllDisplays) private var expandAllDisplays: Bool = false
 
+    /// Màn hình có tai thỏ vật lý luôn dùng Notch, Capsule chỉ dành cho màn hình không tai thỏ.
     private var isPillMode: Bool {
-        notchStyle == "pill"
+        notchStyle == "pill" && !geo.isNotched
     }
 
     private var isViewExpanded: Bool {
@@ -120,7 +121,7 @@ struct NotchDynamicIslandView: View {
                 .padding(.top, topOffset)
                 .animation(.spring(response: 0.34, dampingFraction: 0.82), value: isViewExpanded)
                 .animation(.spring(response: 0.34, dampingFraction: 0.82), value: music.track != nil)
-                .animation(.spring(response: 0.32, dampingFraction: 0.84), value: notchStyle)
+                .animation(.spring(response: 0.32, dampingFraction: 0.84), value: isPill)
         }
         .frame(width: NotchDynamicIslandController.canvasWidth, height: NotchDynamicIslandController.canvasHeight, alignment: .top)
     }
