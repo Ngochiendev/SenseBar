@@ -8,6 +8,14 @@ BUILD_DMG=0
 
 for arg in "$@"; do
   case "$arg" in
+    --clean)
+      ./Tools/clean.sh
+      exit 0
+      ;;
+    --clean-all)
+      ./Tools/clean.sh --all
+      exit 0
+      ;;
     --debug)
       CONFIG="debug"
       UNIVERSAL=0
