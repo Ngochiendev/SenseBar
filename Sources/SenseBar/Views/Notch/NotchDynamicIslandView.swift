@@ -335,12 +335,10 @@ struct NotchDynamicIslandView: View {
     @ViewBuilder
     private func compactContent(size: CGSize, isPill: Bool, geo: SenseScreenGeometry) -> some View {
         if isPill {
-            // Hiển thị dạng Capsule nổi trong Menu Bar:
-            // Để hở đều trên và dưới (khoảng 3.5 - 4pt), lề 2 đầu 8pt ôm theo độ cong viên nang
+            // Capsule nổi trong Menu Bar: ảnh bìa tròn cách đều trên/dưới ~3.5pt
             let coverSize: CGFloat = max(12, size.height - 7)
             HStack(spacing: 7) {
-                // Ảnh đĩa / bài hát dạng tròn vinyl có khoảng đệm thoáng đãng
-                albumCoverView(size: coverSize, isCircle: true)
+                AlbumArtView(artwork: music.artwork, size: coverSize, isCircle: true)
 
                 // Tên bài hát đang phát
                 Text(activeTrack.title)
@@ -367,7 +365,7 @@ struct NotchDynamicIslandView: View {
             }
             .padding(.leading, 5)
             .padding(.trailing, 8)
-            .offset(y: -1.0)
+            .offset(y: -1.0) // Bù ascent của font SF để nội dung cân giữa theo mắt nhìn
             .frame(width: size.width, height: size.height)
         } else {
             // Hiển thị ôm sát phần cứng Tai thỏ (Notch Wings)
@@ -381,7 +379,7 @@ struct NotchDynamicIslandView: View {
             HStack(spacing: 0) {
                 // Cánh trái: cách vách đứng trái 12pt + chứa vừa ảnh bìa 20pt
                 HStack(spacing: 0) {
-                    albumCoverView(size: 20, cornerRadius: 5.5)
+                    AlbumArtView(artwork: music.artwork, size: 20, cornerRadius: 5.5)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, shoulder + innerPadding)
@@ -484,7 +482,7 @@ struct NotchDynamicIslandView: View {
                 Button {
                     music.openPlayerApp()
                 } label: {
-                    albumCoverView(size: 64, cornerRadius: 14)
+                    AlbumArtView(artwork: music.artwork, size: 64, cornerRadius: 14)
                         .shadow(color: music.accentColor.opacity(0.42), radius: 10, y: 4)
                 }
                 .buttonStyle(.plain)
@@ -615,36 +613,5 @@ struct NotchDynamicIslandView: View {
         }
     }
 
-    @ViewBuilder
-    private func albumCoverView(size: CGFloat, isCircle: Bool = false, cornerRadius: CGFloat = 4.5) -> some View {
-        let radius = isCircle ? size / 2 : cornerRadius
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-
-        Group {
-            if let artwork = music.artwork {
-                Image(nsImage: artwork)
-                    .resizable()
-                    .interpolation(.high)
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.30, green: 0.42, blue: 0.95),
-                        Color(red: 0.62, green: 0.28, blue: 0.88)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .overlay(
-                    Image(systemName: "music.note")
-                        .font(.system(size: size * 0.44, weight: .bold))
-                        .foregroundStyle(.white)
-                )
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(shape)
-        .overlay(shape.strokeBorder(Color.white.opacity(isCircle ? 0.18 : 0.16), lineWidth: 0.6))
-    }
 }
 
