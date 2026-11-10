@@ -4,7 +4,7 @@ import Foundation
 
 // MARK: - Space Topology (Native macOS Fullscreen Spaces detection)
 
-enum SenseSpaceTopology {
+enum SpaceTopology {
     private typealias ConnectionID = UInt32
 
     private static func symbol(_ name: String) -> UnsafeMutableRawPointer? {
@@ -70,7 +70,7 @@ enum SenseSpaceTopology {
 // MARK: - App Fullscreen Detection (YouTube in browser, VLC, Games, HTML5 fullscreen)
 
 @MainActor
-enum SenseAppFullscreen {
+enum AppFullscreen {
     struct WindowInfo: Equatable {
         let number: CGWindowID
         let ownerPID: pid_t
@@ -149,20 +149,20 @@ enum SenseAppFullscreen {
     }
 }
 
-// MARK: - SenseFullscreenDetector
+// MARK: - FullscreenDetector
 
 /// Bộ phát hiện trạng thái Toàn màn hình (Fullscreen) trên từng màn hình macOS.
 /// Hỗ trợ cả Native Fullscreen Space và ứng dụng che kín màn hình (YouTube, VLC, Game).
 @MainActor
-public enum SenseFullscreenDetector {
+public enum FullscreenDetector {
     /// Kiểm tra màn hình có đang chạy ứng dụng hoặc nội dung toàn màn hình hay không.
     /// - Parameter displayID: Định danh màn hình phần cứng.
     /// - Returns: `true` nếu màn hình đang chạy toàn màn hình.
     public static func isFullscreen(on displayID: CGDirectDisplayID) -> Bool {
-        if SenseSpaceTopology.isFullscreenSpace(on: displayID) {
+        if SpaceTopology.isFullscreenSpace(on: displayID) {
             return true
         }
-        if SenseAppFullscreen.coveredDisplays().contains(displayID) {
+        if AppFullscreen.coveredDisplays().contains(displayID) {
             return true
         }
         return false
@@ -175,4 +175,3 @@ public enum SenseFullscreenDetector {
         isFullscreen(on: screen.displayID)
     }
 }
-

@@ -25,5 +25,3 @@ public struct NotchTranslucentMaterial: NSViewRepresentable {
         nsView.layer?.cornerRadius = cornerRadius
     }
 }
-
-

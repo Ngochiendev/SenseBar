@@ -4,7 +4,7 @@ import SwiftUI
 /// Thẻ căn chỉnh kích thước Capsule / Notch kèm bản xem trước trực tiếp.
 struct FitAdjustmentCard: View {
     @ObservedObject private var l10n = L10n.shared
-    @ObservedObject private var islandController = NotchDynamicIslandController.shared
+    @ObservedObject private var islandController = IslandController.shared
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
     @AppStorage(DefaultsKey.notchCapsuleFitWidth) private var capsuleFitWidth: Double = 0
     @AppStorage(DefaultsKey.notchCapsuleFitHeight) private var capsuleFitHeight: Double = 0

@@ -5,7 +5,7 @@ import SwiftUI
 // MARK: - NotchDecorativeClock (30fps CADisplayLink stepping)
 
 @MainActor
-final class SenseDecorativeClock {
+final class DecorativeClock {
     static let rate: Float = 30
 
     private let step: (CFTimeInterval) -> Void
@@ -41,8 +41,8 @@ final class SenseDecorativeClock {
 
     @MainActor
     private final class Target: NSObject {
-        weak var clock: SenseDecorativeClock?
-        init(clock: SenseDecorativeClock) { self.clock = clock }
+        weak var clock: DecorativeClock?
+        init(clock: DecorativeClock) { self.clock = clock }
         @objc func fire(_ link: CADisplayLink) { clock?.step(link.targetTimestamp) }
     }
 
@@ -56,7 +56,7 @@ final class SenseDecorativeClock {
 
 // MARK: - Native CALayer Equalizer (Stepped motion with organic heights)
 
-public struct SenseEqualizerBars: View {
+public struct EqualizerBars: View {
     public var isPlaying: Bool = true
     public var bars: Int = 5
     public var barWidth: CGFloat = 2.2
@@ -73,7 +73,7 @@ public struct SenseEqualizerBars: View {
 
     public var body: some View {
         let count = max(1, bars)
-        SenseEqualizerBridge(
+        EqualizerBridge(
             animates: isPlaying,
             bars: count,
             barWidth: barWidth,
@@ -88,18 +88,18 @@ public struct SenseEqualizerBars: View {
     }
 }
 
-private struct SenseEqualizerBridge: NSViewRepresentable {
+private struct EqualizerBridge: NSViewRepresentable {
     let animates: Bool
     let bars: Int
     let barWidth: CGFloat
     let height: CGFloat
     let tint: NSColor
 
-    func makeNSView(context: Context) -> SenseEqualizerView {
-        SenseEqualizerView()
+    func makeNSView(context: Context) -> EqualizerView {
+        EqualizerView()
     }
 
-    func updateNSView(_ view: SenseEqualizerView, context: Context) {
+    func updateNSView(_ view: EqualizerView, context: Context) {
         view.configure(
             animates: animates,
             bars: bars,
@@ -109,12 +109,12 @@ private struct SenseEqualizerBridge: NSViewRepresentable {
         )
     }
 
-    static func dismantleNSView(_ view: SenseEqualizerView, coordinator: ()) {
+    static func dismantleNSView(_ view: EqualizerView, coordinator: ()) {
         view.stop()
     }
 }
 
-final class SenseEqualizerView: NSView {
+final class EqualizerView: NSView {
     private var bars: [CALayer] = []
     private var barWidth: CGFloat = 0
     private var height: CGFloat = 0
@@ -122,7 +122,7 @@ final class SenseEqualizerView: NSView {
     private var swings: [(low: CGFloat, high: CGFloat, rise: Double, lead: Double)] = []
     private var motionStart: CFTimeInterval = 0
     private var joinedWave = false
-    private lazy var clock = SenseDecorativeClock { [weak self] time in self?.step(at: time) }
+    private lazy var clock = DecorativeClock { [weak self] time in self?.step(at: time) }
     private static let waveOrigin: CFTimeInterval = CACurrentMediaTime()
 
     override init(frame frameRect: NSRect) {
@@ -215,7 +215,7 @@ final class SenseEqualizerView: NSView {
         guard index < swings.count else { return barWidth }
         let swing = swings[index]
         guard swing.high > swing.low else { return swing.low }
-        let travel = SenseDecorativeClock.swing((time - motionStart + swing.lead) / swing.rise)
+        let travel = DecorativeClock.swing((time - motionStart + swing.lead) / swing.rise)
         return swing.low + (swing.high - swing.low) * CGFloat(travel)
     }
 
@@ -229,4 +229,3 @@ final class SenseEqualizerView: NSView {
         CATransaction.commit()
     }
 }
-

@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class StatusItemController: NSObject {
+final class MenuBarController: NSObject {
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
     private let onOpenWelcome: () -> Void

@@ -3,15 +3,15 @@ import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    private var statusItemController: StatusItemController?
+    private var menuBarController: MenuBarController?
     private var welcomeWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         BrandIconResources.applyApplicationIcon()
-        NotchDynamicIslandController.shared.start()
+        IslandController.shared.start()
         UpdateService.shared.start()
 
-        statusItemController = StatusItemController(
+        menuBarController = MenuBarController(
             onOpenWelcome: { [weak self] in
                 self?.showWelcomeWindow(resetToFirstStep: true)
             }
@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             // Khi người dùng bấm mở app (hoặc ấn "Mở" từ Gatekeeper), tự động hiển thị Popover
             // trên Menu Bar để người dùng thấy ngay ứng dụng đã mở thành công
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.statusItemController?.showPopover()
+                self?.menuBarController?.showPopover()
             }
         }
 
@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if !hasOnboarded {
             showWelcomeWindow(resetToFirstStep: false)
         } else {
-            statusItemController?.showPopover()
+            menuBarController?.showPopover()
         }
         return true
     }
@@ -140,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func finishOnboardingAndOpenPopover() {
         welcomeWindow?.close()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            self?.statusItemController?.showPopover()
+            self?.menuBarController?.showPopover()
         }
     }
 

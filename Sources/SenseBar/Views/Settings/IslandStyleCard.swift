@@ -2,9 +2,9 @@ import AppKit
 import SwiftUI
 
 /// Thẻ chọn kiểu Capsule / Notch cho màn hình không có tai thỏ.
-struct NotchStyleCard: View {
+struct IslandStyleCard: View {
     @ObservedObject private var l10n = L10n.shared
-    @ObservedObject private var islandController = NotchDynamicIslandController.shared
+    @ObservedObject private var islandController = IslandController.shared
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
 
     var body: some View {

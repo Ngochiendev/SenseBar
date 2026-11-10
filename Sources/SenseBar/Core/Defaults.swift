@@ -27,6 +27,17 @@ enum DefaultsKey {
     static let liquidGlassEnabled = "sensebar.liquidGlassEnabled"
     static let liquidGlassIslandEnabled = "sensebar.liquidGlassIslandEnabled"
 
+    // Thú cưng (Pet) — giữ nguyên chuỗi key để không mất cài đặt cũ của người dùng
+    static let petEnabled = "sensebar.notch.mascotEnabled"
+    static let petStyle = "sensebar.notch.mascotStyle" // "minimal" hoặc "robot"
+    static let petShape = "sensebar.notch.mascotShape" // "ball", "squircle"
+    static let petPalette = "sensebar.notch.mascotPalette" // "pearl", "lemon", "peach", "rose", "lilac", "sky", "mint"
+    static let petSide = "sensebar.notch.mascotSide" // "left" hoặc "right"
+    static let petVisits = "sensebar.notch.mascotVisits"
+    static let petReactions = "sensebar.notch.mascotReactions"
+    static let petHidesWhenIdle = "sensebar.notch.mascotHidesWhenIdle"
+    static let petVisitFrequency = "sensebar.notch.mascotVisitFrequency" // "rare", "normal", "frequent"
+
     // Cập nhật phiên bản
     static let autoCheckUpdates = "sensebar.updates.autoCheck"
 }

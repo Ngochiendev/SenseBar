@@ -4,8 +4,8 @@ import SwiftUI
 /// Thẻ minh họa Dynamic Island có hoạt ảnh rê chuột mở rộng trong menu chính.
 struct IslandPreviewCard: View {
     @ObservedObject private var l10n = L10n.shared
-    @ObservedObject private var music = NotchMusicService.shared
-    @ObservedObject private var islandController = NotchDynamicIslandController.shared
+    @ObservedObject private var music = MusicService.shared
+    @ObservedObject private var islandController = IslandController.shared
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
     @AppStorage(DefaultsKey.notchShowVisualizer) private var showVisualizer: Bool = true
 
@@ -42,7 +42,7 @@ struct IslandPreviewCard: View {
                     .truncatingRemainder(dividingBy: 4.2) / 4.2
                 let exp = previewExpansionProgress(for: cycle)
                 let isPill = showsCapsule
-                let compactW: CGFloat = isPill ? 162 : 148
+                let compactW: CGFloat = isPill ? 56 : 148
                 let compactH: CGFloat = isPill ? 18 : 22
                 let expandedW: CGFloat = 248
                 let expandedH: CGFloat = 62
@@ -111,17 +111,13 @@ struct IslandPreviewCard: View {
                             Group {
                                 if isPill {
                                     HStack(spacing: 5) {
-                                        AlbumArtView(artwork: music.artwork, size: 11, isCircle: true)
-                                        Text(music.track?.title ?? "Midnight City — M83")
-                                            .font(.system(size: 8.5, weight: .semibold))
-                                            .foregroundStyle(.white)
-                                            .lineLimit(1)
-                                        Spacer(minLength: 3)
+                                        AlbumArtView(artwork: music.artwork, size: 12, isCircle: true)
+                                        Spacer(minLength: 2)
                                         if showVisualizer {
-                                            SenseEqualizerBars(
+                                            EqualizerBars(
                                                 isPlaying: true,
-                                                bars: 4,
-                                                barWidth: 1.5,
+                                                bars: 7,
+                                                barWidth: 1.4,
                                                 height: 8.5,
                                                 tint: music.accentColor
                                             )
@@ -131,9 +127,7 @@ struct IslandPreviewCard: View {
                                                 .foregroundStyle(music.accentColor)
                                         }
                                     }
-                                    .padding(.leading, 4.5)
-                                    .padding(.trailing, 6)
-                                    .offset(y: -0.8)
+                                    .padding(.horizontal, 4.5)
                                 } else {
                                     HStack(spacing: 0) {
                                         AlbumArtView(artwork: music.artwork, size: 13, cornerRadius: 3.8)
@@ -150,7 +144,7 @@ struct IslandPreviewCard: View {
                                         Spacer()
                                         Group {
                                             if showVisualizer {
-                                                SenseEqualizerBars(
+                                                EqualizerBars(
                                                     isPlaying: true,
                                                     bars: 5,
                                                     barWidth: 1.5,
@@ -182,7 +176,7 @@ struct IslandPreviewCard: View {
                                     }
                                     Spacer()
                                     if showVisualizer {
-                                        SenseEqualizerBars(
+                                        EqualizerBars(
                                             isPlaying: true,
                                             bars: 5,
                                             barWidth: 1.4,

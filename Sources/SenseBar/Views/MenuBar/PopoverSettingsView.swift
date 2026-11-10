@@ -8,7 +8,7 @@ struct PopoverSettingsView: View {
     let onQuit: () -> Void
 
     @ObservedObject private var l10n = L10n.shared
-    @ObservedObject private var islandController = NotchDynamicIslandController.shared
+    @ObservedObject private var islandController = IslandController.shared
 
     var body: some View {
         VStack(spacing: 10) {
@@ -21,7 +21,7 @@ struct PopoverSettingsView: View {
                     DisplayTargetCard()
 
                     if islandController.canChooseStyle {
-                        NotchStyleCard()
+                        IslandStyleCard()
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 

@@ -199,4 +199,3 @@ private struct GitHubReleasePayload: Decodable {
         case assets
     }
 }
-

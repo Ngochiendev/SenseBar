@@ -4,7 +4,7 @@ import SwiftUI
 
 // MARK: - NotchPanel tùy chỉnh (Luôn giữ active appearance cho Liquid Glass & hỗ trợ đa màn hình)
 
-final class SenseNotchPanel: NSPanel {
+final class IslandPanel: NSPanel {
     static let overlayCollectionBehavior: NSWindow.CollectionBehavior = [
         .canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle
     ]
@@ -18,8 +18,8 @@ final class SenseNotchPanel: NSPanel {
 }
 
 @MainActor
-final class NotchDynamicIslandController: ObservableObject {
-    static let shared = NotchDynamicIslandController()
+final class IslandController: ObservableObject {
+    static let shared = IslandController()
 
     static let canvasWidth: CGFloat = 430
     static let canvasHeight: CGFloat = 210
@@ -33,8 +33,8 @@ final class NotchDynamicIslandController: ObservableObject {
     @Published private(set) var hasNotchedDisplay: Bool = false
 
     // Quản lý cửa sổ chính (Active Window) và các cửa sổ phụ trên đa màn hình (Mirror Panels)
-    private var mainPanel: SenseNotchPanel?
-    private var mirrorPanels: [CGDirectDisplayID: SenseNotchPanel] = [:]
+    private var mainPanel: IslandPanel?
+    private var mirrorPanels: [CGDirectDisplayID: IslandPanel] = [:]
 
     private var mouseMonitor: Any?
     private var localMouseMonitor: Any?
@@ -46,6 +46,8 @@ final class NotchDynamicIslandController: ObservableObject {
     private var hoverWorkItem: DispatchWorkItem?
     private var collapseWorkItem: DispatchWorkItem?
     private var isPinnedOpen = false
+    private var musicCancellable: AnyCancellable?
+    private var pauseObserver: NSObjectProtocol?
 
     private init() {
         registerDefaultPreferences()
@@ -86,6 +88,46 @@ final class NotchDynamicIslandController: ObservableObject {
                 self?.syncFullscreenState()
             }
         }
+
+        pauseObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name("SenseBarMusicDidPause"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if self.isExpanded {
+                    self.isPinnedOpen = false
+                    self.collapseWorkItem?.cancel()
+                    self.collapseWorkItem = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                        guard let self else { return }
+                        if MusicService.shared.track?.isPlaying != true {
+                            self.collapse()
+                        }
+                    }
+                }
+            }
+        }
+
+        musicCancellable = MusicService.shared.$track
+            .map { $0?.isPlaying == true }
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isPlaying in
+                guard let self else { return }
+                if !isPlaying && self.isExpanded {
+                    self.isPinnedOpen = false
+                    self.collapseWorkItem?.cancel()
+                    self.collapseWorkItem = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) { [weak self] in
+                        guard let self else { return }
+                        if MusicService.shared.track?.isPlaying != true {
+                            self.collapse()
+                        }
+                    }
+                }
+            }
     }
 
     private func registerDefaultPreferences() {
@@ -99,7 +141,15 @@ final class NotchDynamicIslandController: ObservableObject {
             DefaultsKey.pillarDynamicIslandEnabled: true,
             DefaultsKey.pillarAudioStudioEnabled: true,
             DefaultsKey.liquidGlassEnabled: true,
-            DefaultsKey.liquidGlassIslandEnabled: true
+            DefaultsKey.liquidGlassIslandEnabled: true,
+            DefaultsKey.petEnabled: true,
+            DefaultsKey.petStyle: "minimal",
+            DefaultsKey.petShape: "ball",
+            DefaultsKey.petPalette: "pearl",
+            DefaultsKey.petSide: "left",
+            DefaultsKey.petVisits: true,
+            DefaultsKey.petReactions: true,
+            DefaultsKey.petVisitFrequency: "normal"
         ])
     }
 
@@ -108,9 +158,9 @@ final class NotchDynamicIslandController: ObservableObject {
         return targetScreen(for: mode) ?? NSScreen.main ?? NSScreen.screens.first ?? NSScreen()
     }
 
-    func geometry(for screen: NSScreen? = nil) -> SenseScreenGeometry {
+    func geometry(for screen: NSScreen? = nil) -> ScreenGeometry {
         let target = screen ?? targetScreenForActivePanel
-        return SenseScreenGeometry(for: target)
+        return ScreenGeometry(for: target)
     }
 
     func islandSize(for screen: NSScreen? = nil, expanded: Bool? = nil) -> CGSize {
@@ -120,11 +170,23 @@ final class NotchDynamicIslandController: ObservableObject {
         }
         let fitWidth = UserDefaults.standard.double(forKey: DefaultsKey.notchCapsuleFitWidth)
         let fitHeight = UserDefaults.standard.double(forKey: DefaultsKey.notchCapsuleFitHeight)
+        let isPlaying = MusicService.shared.track?.isPlaying == true
+        let hasPet = PetService.shared.isEnabled
 
         if usesCapsule(on: screen) {
-            return geo.compactCapsuleSize(customWidth: fitWidth, customHeight: fitHeight)
+            return geo.compactCapsuleSize(
+                isPlaying: isPlaying,
+                hasPet: hasPet,
+                customWidth: fitWidth,
+                customHeight: fitHeight
+            )
         }
-        return geo.compactNotchSize(customWidth: fitWidth, customHeight: fitHeight)
+        return geo.compactNotchSize(
+            isPlaying: isPlaying,
+            hasPet: hasPet,
+            customWidth: fitWidth,
+            customHeight: fitHeight
+        )
     }
 
     // MARK: - Kiểu dáng theo phần cứng
@@ -142,11 +204,11 @@ final class NotchDynamicIslandController: ObservableObject {
         let candidates: [NSScreen] = (mode == "pointer" || mode == "all")
             ? NSScreen.screens
             : [targetScreen(for: mode)].compactMap { $0 }
-        let available = candidates.contains { !SenseScreenGeometry(for: $0).isNotched }
+        let available = candidates.contains { !ScreenGeometry(for: $0).isNotched }
         if canChooseStyle != available {
             canChooseStyle = available
         }
-        let notched = NSScreen.screens.contains { SenseScreenGeometry(for: $0).isNotched }
+        let notched = NSScreen.screens.contains { ScreenGeometry(for: $0).isNotched }
         if hasNotchedDisplay != notched {
             hasNotchedDisplay = notched
         }
@@ -154,7 +216,7 @@ final class NotchDynamicIslandController: ObservableObject {
 
     /// Khởi động hệ thống Dynamic Island, lắng nghe sự kiện chuột, nhạc và màn hình.
     func start() {
-        _ = NotchMusicService.shared
+        _ = MusicService.shared
         setupPanelIfNeeded()
         syncFullscreenMonitoring()
         syncAllDisplays()
@@ -178,7 +240,7 @@ final class NotchDynamicIslandController: ObservableObject {
         syncAllDisplays()
     }
 
-    /// Được gọi tự động ngay khi macOS vừa cấp quyền Accessibility thành công (1 phát ăn ngay)
+    /// Được gọi khi macOS cấp quyền Accessibility.
     func permissionDidGrant() {
         restartMouseTracking()
         syncVisibility()
@@ -236,11 +298,11 @@ final class NotchDynamicIslandController: ObservableObject {
         guard mainPanel == nil else { return }
 
         let activeScreen = targetScreenForActivePanel
-        let rootView = NotchDynamicIslandView(controller: self, displayID: activeScreen.displayID, isMirror: false)
-        let hostingView = NotchPassthroughHostingView(rootView: rootView, controller: self)
+        let rootView = IslandView(controller: self, displayID: activeScreen.displayID, isMirror: false)
+        let hostingView = IslandHostingView(rootView: rootView, controller: self)
         hostingView.frame = NSRect(x: 0, y: 0, width: Self.canvasWidth, height: Self.canvasHeight)
 
-        let window = SenseNotchPanel(
+        let window = IslandPanel(
             contentRect: hostingView.frame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -252,8 +314,8 @@ final class NotchDynamicIslandController: ObservableObject {
         window.hidesOnDeactivate = false
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .darkAqua)
-        window.level = SenseNotchPanel.normalLevel
-        window.collectionBehavior = SenseNotchPanel.overlayCollectionBehavior
+        window.level = IslandPanel.normalLevel
+        window.collectionBehavior = IslandPanel.overlayCollectionBehavior
         window.contentView = hostingView
         window.ignoresMouseEvents = true
         self.mainPanel = window
@@ -282,15 +344,15 @@ final class NotchDynamicIslandController: ObservableObject {
             )
             mainPanel.setFrame(frame, display: true)
 
-            let isFs = SenseFullscreenDetector.isFullscreen(on: activeScreen)
+            let isFs = FullscreenDetector.isFullscreen(on: activeScreen)
             if hideInFullscreen && isFs {
                 mainPanel.orderOut(nil)
             } else {
                 mainPanel.orderFrontRegardless()
             }
 
-            if let hostingView = mainPanel.contentView as? NotchPassthroughHostingView<NotchDynamicIslandView> {
-                hostingView.rootView = NotchDynamicIslandView(controller: self, displayID: activeScreen.displayID, isMirror: false)
+            if let hostingView = mainPanel.contentView as? IslandHostingView<IslandView> {
+                hostingView.rootView = IslandView(controller: self, displayID: activeScreen.displayID, isMirror: false)
             }
         }
 
@@ -319,11 +381,11 @@ final class NotchDynamicIslandController: ObservableObject {
                 )
                 mirror.setFrame(frame, display: true)
 
-                if let hostingView = mirror.contentView as? NSHostingView<NotchDynamicIslandView> {
-                    hostingView.rootView = NotchDynamicIslandView(controller: self, displayID: id, isMirror: true)
+                if let hostingView = mirror.contentView as? NSHostingView<IslandView> {
+                    hostingView.rootView = IslandView(controller: self, displayID: id, isMirror: true)
                 }
 
-                let isMirrorFs = SenseFullscreenDetector.isFullscreen(on: screen)
+                let isMirrorFs = FullscreenDetector.isFullscreen(on: screen)
                 if hideInFullscreen && isMirrorFs {
                     mirror.orderOut(nil)
                 } else {
@@ -372,7 +434,7 @@ final class NotchDynamicIslandController: ObservableObject {
 
         let activeScreen = targetScreenForActivePanel
         if let mainPanel {
-            let isMainFullscreen = SenseFullscreenDetector.isFullscreen(on: activeScreen)
+            let isMainFullscreen = FullscreenDetector.isFullscreen(on: activeScreen)
             if isMainFullscreen && mainPanel.isVisible {
                 collapse()
                 mainPanel.orderOut(nil)
@@ -384,7 +446,7 @@ final class NotchDynamicIslandController: ObservableObject {
         let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
         if mode == "all" {
             for (id, mirror) in mirrorPanels {
-                let isMirrorFullscreen = SenseFullscreenDetector.isFullscreen(on: id)
+                let isMirrorFullscreen = FullscreenDetector.isFullscreen(on: id)
                 if isMirrorFullscreen && mirror.isVisible {
                     mirror.orderOut(nil)
                 } else if !isMirrorFullscreen && !mirror.isVisible {
@@ -394,12 +456,12 @@ final class NotchDynamicIslandController: ObservableObject {
         }
     }
 
-    private func createMirrorPanel(for screen: NSScreen) -> SenseNotchPanel {
-        let rootView = NotchDynamicIslandView(controller: self, displayID: screen.displayID, isMirror: true)
+    private func createMirrorPanel(for screen: NSScreen) -> IslandPanel {
+        let rootView = IslandView(controller: self, displayID: screen.displayID, isMirror: true)
         let hostingView = NSHostingView(rootView: rootView)
         hostingView.frame = NSRect(x: 0, y: 0, width: Self.canvasWidth, height: Self.canvasHeight)
 
-        let window = SenseNotchPanel(
+        let window = IslandPanel(
             contentRect: hostingView.frame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -411,8 +473,8 @@ final class NotchDynamicIslandController: ObservableObject {
         window.hidesOnDeactivate = false
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .darkAqua)
-        window.level = SenseNotchPanel.normalLevel
-        window.collectionBehavior = SenseNotchPanel.overlayCollectionBehavior
+        window.level = IslandPanel.normalLevel
+        window.collectionBehavior = IslandPanel.overlayCollectionBehavior
         window.contentView = hostingView
         window.ignoresMouseEvents = true
         return window
@@ -436,13 +498,12 @@ final class NotchDynamicIslandController: ObservableObject {
             if let mouseScreen = NSScreen.screens.first(where: { $0.frame.contains(mouseLoc) }) {
                 return mouseScreen
             }
-            if let notched = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) {
-                return notched
-            }
             return NSScreen.main ?? NSScreen.screens.first
         default: // "automatic"
-            if let notched = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) {
-                return notched
+            // Tự động: Ưu tiên màn hình đang có con trỏ chuột thao tác, hoặc màn hình chính (Main Screen)
+            let mouseLoc = NSEvent.mouseLocation
+            if let mouseScreen = NSScreen.screens.first(where: { $0.frame.contains(mouseLoc) }) {
+                return mouseScreen
             }
             return NSScreen.main ?? NSScreen.screens.first
         }
@@ -456,7 +517,7 @@ final class NotchDynamicIslandController: ObservableObject {
             cameraCutoutWidth = 184
         }
         let safeTop = screen.safeAreaInsets.top
-        cameraCutoutHeight = safeTop > 0 ? max(SenseScreenGeometry.standardNotchHeight, safeTop) : (SenseScreenGeometry.standardNotchHeight - 2.0)
+        cameraCutoutHeight = safeTop > 0 ? max(ScreenGeometry.standardNotchHeight, safeTop) : (ScreenGeometry.standardNotchHeight - 2.0)
     }
 
     // MARK: - Theo dõi chuột (Hover & Click-through & Follow Pointer)
@@ -570,9 +631,9 @@ final class NotchDynamicIslandController: ObservableObject {
         guard SensePillar.dynamicIsland.isEnabled(), let mainPanel, mainPanel.isVisible else { return }
         let mouse = NSEvent.mouseLocation
 
-        // Follow Pointer: Nếu bật chế độ "pointer" hoặc "all", khi con trỏ chuyển màn hình thì island chuyển theo ngay lập tức
+        // Khi con trỏ chuyển màn hình thì island chuyển theo ngay lập tức
         let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
-        if (mode == "pointer" || mode == "all") && !isExpanded {
+        if (mode == "pointer" || mode == "all" || mode == "automatic") && !isExpanded {
             if let mouseScreen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
                mouseScreen.displayID != mainPanel.screen?.displayID {
                 syncAllDisplays()
@@ -586,11 +647,13 @@ final class NotchDynamicIslandController: ObservableObject {
         }
 
         let expandOnHover = UserDefaults.standard.bool(forKey: DefaultsKey.notchExpandOnHover)
+        let isMusicPlaying = MusicService.shared.track?.isPlaying == true
         if inside {
             collapseWorkItem?.cancel()
             collapseWorkItem = nil
-            if expandOnHover && !isExpanded {
-                scheduleHoverExpand(after: 0.06)
+            // Chỉ mở rộng khi rê chuột nếu đang có bài hát đang phát
+            if expandOnHover && !isExpanded && isMusicPlaying {
+                scheduleHoverExpand(after: 0.08)
             }
         } else {
             hoverWorkItem?.cancel()
@@ -613,6 +676,7 @@ final class NotchDynamicIslandController: ObservableObject {
             guard SensePillar.dynamicIsland.isEnabled(),
                   !self.isExpanded,
                   UserDefaults.standard.bool(forKey: DefaultsKey.notchExpandOnHover),
+                  MusicService.shared.track?.isPlaying == true,
                   self.isPointInsideIsland(NSEvent.mouseLocation) else {
                 return
             }
@@ -644,10 +708,10 @@ extension NSScreen {
     }
 }
 
-private final class NotchPassthroughHostingView<Content: View>: NSHostingView<Content> {
-    weak var controller: NotchDynamicIslandController?
+private final class IslandHostingView<Content: View>: NSHostingView<Content> {
+    weak var controller: IslandController?
 
-    init(rootView: Content, controller: NotchDynamicIslandController) {
+    init(rootView: Content, controller: IslandController) {
         self.controller = controller
         super.init(rootView: rootView)
     }

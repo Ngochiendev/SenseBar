@@ -32,12 +32,12 @@ struct NowPlayingTrack: Equatable {
 }
 
 @MainActor
-final class NotchMusicService: ObservableObject {
-    static let shared = NotchMusicService()
+final class MusicService: ObservableObject {
+    static let shared = MusicService()
 
     @Published private(set) var track: NowPlayingTrack?
     @Published private(set) var artwork: NSImage?
-    @Published private(set) var accentColor: Color = Color(red: 0.38, green: 0.64, blue: 1.0)
+    @Published private(set) var accentColor: Color = Color(red: 0.98, green: 0.58, blue: 0.12)
 
     private var process: Process?
     private var inputPipe: Pipe?
@@ -139,6 +139,9 @@ final class NotchMusicService: ObservableObject {
             current.isPlaying.toggle()
             track = current
             lastSampleDate = Date()
+            if !current.isPlaying {
+                NotificationCenter.default.post(name: NSNotification.Name("SenseBarMusicDidPause"), object: nil)
+            }
         }
         sendCommand("toggle")
     }
@@ -189,16 +192,18 @@ final class NotchMusicService: ObservableObject {
     private func startElapsedTicker() {
         tickTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, var current = self.track, current.isPlaying else { return }
-                let now = Date()
-                let delta = now.timeIntervalSince(self.lastSampleDate)
-                self.lastSampleDate = now
-                if current.duration > 0 {
-                    current.elapsed = min(current.duration, current.elapsed + delta)
-                } else {
-                    current.elapsed += delta
+                guard let self else { return }
+                if var current = self.track, current.isPlaying {
+                    let now = Date()
+                    let delta = now.timeIntervalSince(self.lastSampleDate)
+                    self.lastSampleDate = now
+                    if current.duration > 0 {
+                        current.elapsed = min(current.duration, current.elapsed + delta)
+                    } else {
+                        current.elapsed += delta
+                    }
+                    self.track = current
                 }
-                self.track = current
             }
         }
     }
@@ -221,15 +226,16 @@ final class NotchMusicService: ObservableObject {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         if json["error"] != nil { return }
 
-        let rawTitle = (json["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !rawTitle.isEmpty else {
-            DispatchQueue.main.async {
-                self.track = nil
-                self.artwork = nil
-            }
-            return
+        var rawTitle = (json["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // Xoá badge thông báo ở đầu tiêu đề do trình duyệt thêm vào ví dụ: "(1) ", "(12) "
+        if let regex = try? NSRegularExpression(pattern: #"^\(\d+\+?\)\s*"#) {
+            let range = NSRange(rawTitle.startIndex..., in: rawTitle)
+            rawTitle = regex.stringByReplacingMatches(in: rawTitle, options: [], range: range, withTemplate: "")
         }
-
+        if let range = rawTitle.range(of: " - YouTube") {
+            rawTitle = String(rawTitle[..<range.lowerBound])
+        }
+        rawTitle = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let artist = (json["artist"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let album = (json["album"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let duration = (json["duration"] as? Double) ?? 0
@@ -238,6 +244,21 @@ final class NotchMusicService: ObservableObject {
         let bundleID = (json["bundleID"] as? String) ?? ""
         let pid = (json["pid"] as? Int) ?? 0
         let appName = (json["appName"] as? String) ?? Self.friendlyAppName(for: bundleID)
+
+        let isBrowser = bundleID.lowercased().contains("chrome")
+            || bundleID.lowercased().contains("brave")
+            || bundleID.lowercased().contains("arc")
+            || bundleID.lowercased().contains("edge")
+
+        let isBrowserHomepage = isBrowser && (rawTitle.lowercased() == "youtube" || rawTitle.lowercased() == "new tab" || rawTitle.lowercased() == "tab mới") && (!isPlaying || duration <= 0)
+
+        guard !rawTitle.isEmpty, !isBrowserHomepage else {
+            DispatchQueue.main.async {
+                self.track = nil
+                self.artwork = nil
+            }
+            return
+        }
 
         var newArtwork: NSImage?
         var newAccent: Color?
@@ -288,8 +309,9 @@ final class NotchMusicService: ObservableObject {
     }
 
     private static func extractAccentColor(from image: NSImage) -> Color {
+        let fallback = Color(red: 0.98, green: 0.58, blue: 0.12)
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return Color(red: 0.38, green: 0.64, blue: 1.0)
+            return fallback
         }
         let width = 8, height = 8
         var pixelData = [UInt8](repeating: 0, count: width * height * 4)
@@ -302,7 +324,7 @@ final class NotchMusicService: ObservableObject {
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else {
-            return Color(red: 0.38, green: 0.64, blue: 1.0)
+            return fallback
         }
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
@@ -326,4 +348,3 @@ final class NotchMusicService: ObservableObject {
         return Color(red: r, green: g, blue: b)
     }
 }
-

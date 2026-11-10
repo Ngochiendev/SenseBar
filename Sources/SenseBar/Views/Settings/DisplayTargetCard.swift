@@ -4,7 +4,7 @@ import SwiftUI
 /// Thẻ chọn màn hình hiển thị Island và hành vi khi chạy toàn màn hình.
 struct DisplayTargetCard: View {
     @ObservedObject private var l10n = L10n.shared
-    @ObservedObject private var islandController = NotchDynamicIslandController.shared
+    @ObservedObject private var islandController = IslandController.shared
     @AppStorage(DefaultsKey.notchDisplayTarget) private var displayTarget: String = "automatic"
     @AppStorage(DefaultsKey.notchExpandAllDisplays) private var expandAllDisplays: Bool = false
     @AppStorage(DefaultsKey.notchHideInFullscreen) private var hideInFullscreen: Bool = true

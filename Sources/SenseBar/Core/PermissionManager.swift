@@ -86,7 +86,7 @@ final class PermissionManager: ObservableObject {
             stopMonitoring()
             PermissionGuideOverlay.shared.dismiss()
             DispatchQueue.main.async {
-                NotchDynamicIslandController.shared.permissionDidGrant()
+                IslandController.shared.permissionDidGrant()
             }
         }
     }

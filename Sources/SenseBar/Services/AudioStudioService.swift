@@ -148,7 +148,7 @@ final class AudioStudioService: ObservableObject {
                   let bundleID = app.bundleIdentifier,
                   bundleID != Bundle.main.bundleIdentifier else { return false }
             return Self.knownAudioBundles.contains(bundleID)
-                || bundleID == NotchMusicService.shared.track?.bundleID
+                || bundleID == MusicService.shared.track?.bundleID
         }
 
         var result: [AudioAppEntry] = []
@@ -245,4 +245,3 @@ final class AudioStudioService: ObservableObject {
         }
     }
 }
-

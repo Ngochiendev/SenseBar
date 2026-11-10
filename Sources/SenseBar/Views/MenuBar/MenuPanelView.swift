@@ -30,7 +30,7 @@ struct MenuPanelView: View {
 
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var permissions = PermissionManager.shared
-    @ObservedObject private var islandController = NotchDynamicIslandController.shared
+    @ObservedObject private var islandController = IslandController.shared
     @ObservedObject private var audio = AudioStudioService.shared
     @ObservedObject private var updateService = UpdateService.shared
 
@@ -238,62 +238,68 @@ struct MenuPanelView: View {
     // MARK: - Tab Dynamic Island
 
     private var dynamicIslandControlSection: some View {
-        VStack(spacing: 8) {
-            // Khung Ảnh Example trực quan cho Dynamic Island
-            IslandPreviewCard()
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 8) {
+                // Khung Ảnh Example trực quan cho Dynamic Island
+                IslandPreviewCard()
 
-            // Khung Điều khiển Dynamic Island
-            VStack(alignment: .leading, spacing: 10) {
-                Text(l10n.string(vi: "Tùy chỉnh Dynamic Island", en: "Dynamic Island Controls"))
-                    .font(.system(size: 12, weight: .bold))
+                // Khung Điều khiển Dynamic Island
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(l10n.string(vi: "Tùy chỉnh Dynamic Island", en: "Dynamic Island Controls"))
+                        .font(.system(size: 12, weight: .bold))
 
-                // Chọn kiểu dáng: chỉ hiện khi có màn hình không tai thỏ
-                if islandController.canChooseStyle {
-                    HStack(spacing: 6) {
-                        styleOptionButton(
-                            id: "notch",
-                            icon: "macbook",
-                            title: l10n.string(vi: "Ôm sát Tai thỏ", en: "Notch Cutout")
-                        )
-                        styleOptionButton(
-                            id: "pill",
-                            icon: "capsule.fill",
-                            title: l10n.string(vi: "Viên nang nổi", en: "Floating Pill")
-                        )
-                    }
-                    .transition(.opacity)
-
-                    if islandController.hasNotchedDisplay {
-                        Label(
-                            l10n.string(
-                                vi: "Màn hình MacBook có tai thỏ luôn dùng kiểu Notch.",
-                                en: "Notched MacBook displays always use the Notch style."
-                            ),
-                            systemImage: "info.circle.fill"
-                        )
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                    // Chọn kiểu dáng: chỉ hiện khi có màn hình không tai thỏ
+                    if islandController.canChooseStyle {
+                        HStack(spacing: 6) {
+                            styleOptionButton(
+                                id: "notch",
+                                icon: "macbook",
+                                title: l10n.string(vi: "Ôm sát Tai thỏ", en: "Notch Cutout")
+                            )
+                            styleOptionButton(
+                                id: "pill",
+                                icon: "capsule.fill",
+                                title: l10n.string(vi: "Viên nang nổi", en: "Floating Pill")
+                            )
+                        }
                         .transition(.opacity)
+
+                        if islandController.hasNotchedDisplay {
+                            Label(
+                                l10n.string(
+                                    vi: "Màn hình MacBook có tai thỏ luôn dùng kiểu Notch.",
+                                    en: "Notched MacBook displays always use the Notch style."
+                                ),
+                                systemImage: "info.circle.fill"
+                            )
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .transition(.opacity)
+                        }
+
+                        Divider().opacity(0.5)
                     }
 
-                    Divider().opacity(0.5)
+                    compactToggleRow(
+                        icon: "cursorarrow.motionlines",
+                        title: l10n.string(vi: "Tự mở rộng khi rê chuột vào tai thỏ", en: "Expand when hovering over notch"),
+                        isOn: $expandOnHover
+                    )
+
+                    compactToggleRow(
+                        icon: "waveform",
+                        title: l10n.string(vi: "Hiển thị sóng nhạc theo bài hát", en: "Show album-tinted audio visualizer"),
+                        isOn: $showVisualizer
+                    )
                 }
+                .panelCard()
+                .animation(.easeInOut(duration: 0.25), value: islandController.canChooseStyle)
 
-                compactToggleRow(
-                    icon: "cursorarrow.motionlines",
-                    title: l10n.string(vi: "Tự mở rộng khi rê chuột vào tai thỏ", en: "Expand when hovering over notch"),
-                    isOn: $expandOnHover
-                )
-
-                compactToggleRow(
-                    icon: "waveform",
-                    title: l10n.string(vi: "Hiển thị sóng nhạc theo bài hát", en: "Show album-tinted audio visualizer"),
-                    isOn: $showVisualizer
-                )
+                // Thú cưng Dynamic Island (Pet)
+                PetCard()
             }
-            .panelCard()
-            .animation(.easeInOut(duration: 0.25), value: islandController.canChooseStyle)
         }
+        .frame(maxHeight: 520)
     }
 
     private func styleOptionButton(id: String, icon: String, title: String) -> some View {
@@ -302,7 +308,7 @@ struct MenuPanelView: View {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
                 notchStyle = id
             }
-            NotchDynamicIslandController.shared.syncVisibility()
+            IslandController.shared.syncVisibility()
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)

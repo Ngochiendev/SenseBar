@@ -4,7 +4,7 @@ import SwiftUI
 /// Tab Loa & Ứng dụng: minh họa bộ trộn âm lượng và danh sách ứng dụng đang phát.
 struct AudioMixerSection: View {
     @ObservedObject private var l10n = L10n.shared
-    @ObservedObject private var music = NotchMusicService.shared
+    @ObservedObject private var music = MusicService.shared
     @ObservedObject private var audio = AudioStudioService.shared
 
     var body: some View {
