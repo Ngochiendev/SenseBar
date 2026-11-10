@@ -110,6 +110,7 @@ struct IslandView: View {
                 .animation(.spring(response: 0.42, dampingFraction: 0.72), value: isViewExpanded)
                 .animation(.spring(response: 0.42, dampingFraction: 0.72), value: music.track?.isPlaying)
                 .animation(.spring(response: 0.42, dampingFraction: 0.72), value: pet.isEnabled)
+                .animation(.easeInOut(duration: 0.18), value: pet.currentStatusCue?.id)
                 .animation(.spring(response: 0.32, dampingFraction: 0.84), value: isPill)
         }
         .frame(width: IslandController.canvasWidth, height: IslandController.canvasHeight, alignment: .top)
@@ -328,7 +329,7 @@ struct IslandView: View {
     @ViewBuilder
     private func compactContent(size: CGSize, isPill: Bool, geo: ScreenGeometry) -> some View {
         if isPill {
-            let track = PetEngine.track(
+            let baseTrack = PetEngine.track(
                 stripWidth: size.width,
                 stripHeight: size.height,
                 wing: 0,
@@ -336,9 +337,16 @@ struct IslandView: View {
                 floats: true,
                 bodyHeight: size.height
             )
+            let track: PetTrack = {
+                var adjusted = baseTrack
+                let edgeInset = max(6, adjusted.size * 0.72)
+                adjusted.rest = pet.side == .left ? edgeInset : size.width - edgeInset
+                adjusted.mirrored = pet.side == .right
+                return adjusted
+            }()
 
             ZStack {
-                if let playingTrack = music.track, playingTrack.isPlaying {
+                if let playingTrack = music.track, playingTrack.isPlaying, !pet.hasActivePresentation {
                     let coverSize: CGFloat = max(14, size.height - 6)
                     HStack(spacing: 8) {
                         AlbumArtView(artwork: music.artwork, size: coverSize, isCircle: true)
@@ -369,24 +377,16 @@ struct IslandView: View {
                         mood: pet.mood,
                         reaction: pet.currentReaction,
                         awake: pet.isEnabled,
-                        yieldsToActivities: true
+                        yieldsToActivities: !pet.hasActivePresentation
                     )
                     .frame(width: size.width, height: size.height)
                 }
 
-                if pet.isEnabled, pet.currentVisit != nil, music.track?.isPlaying == true {
-                    PetTrackView(
-                        look: pet.look,
-                        track: track,
-                        rests: false,
-                        visit: pet.currentVisit,
-                        mood: pet.mood,
-                        reaction: pet.currentReaction,
-                        awake: pet.isEnabled,
-                        yieldsToActivities: true
-                    )
-                    .frame(width: size.width, height: size.height)
+                if let cue = pet.currentStatusCue {
+                    petStatusCue(cue, size: size, isPill: true, geo: geo)
+                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
                 }
+
             }
             .frame(width: size.width, height: size.height)
         } else {
@@ -405,7 +405,7 @@ struct IslandView: View {
             )
 
             ZStack {
-                if let playingTrack = music.track, playingTrack.isPlaying {
+                if let playingTrack = music.track, playingTrack.isPlaying, !pet.hasActivePresentation {
                     HStack(spacing: 0) {
                         HStack(spacing: 0) {
                             AlbumArtView(artwork: music.artwork, size: 20, cornerRadius: 5.5)
@@ -464,26 +464,62 @@ struct IslandView: View {
                         mood: pet.mood,
                         reaction: pet.currentReaction,
                         awake: pet.isEnabled,
-                        yieldsToActivities: true
+                        yieldsToActivities: !pet.hasActivePresentation
                     )
                     .frame(width: size.width, height: size.height)
                 }
 
-                if pet.isEnabled, pet.currentVisit != nil, music.track?.isPlaying == true {
-                    PetTrackView(
-                        look: pet.look,
-                        track: track,
-                        rests: false,
-                        visit: pet.currentVisit,
-                        mood: pet.mood,
-                        reaction: pet.currentReaction,
-                        awake: pet.isEnabled,
-                        yieldsToActivities: true
-                    )
-                    .frame(width: size.width, height: size.height)
+                if let cue = pet.currentStatusCue {
+                    petStatusCue(cue, size: size, isPill: false, geo: geo)
+                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                }
+
+            }
+            .frame(width: size.width, height: size.height)
+        }
+    }
+
+    @ViewBuilder
+    private func petStatusCue(_ cue: PetStatusCue, size: CGSize, isPill: Bool,
+                              geo: ScreenGeometry) -> some View {
+        let label = Label(statusTitle(cue), systemImage: cue.symbol)
+            .font(.system(size: 9.5, weight: .semibold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.white.opacity(0.12), in: Capsule())
+
+        if isPill || !geo.isNotched {
+            label.frame(width: size.width, height: size.height, alignment: .center)
+        } else {
+            let wing = geo.compactNotchWingWidth
+            HStack(spacing: 0) {
+                if pet.side == .left {
+                    Spacer().frame(width: wing + geo.cameraWidth)
+                    label.frame(width: wing)
+                } else {
+                    label.frame(width: wing)
+                    Spacer().frame(width: geo.cameraWidth + wing)
                 }
             }
             .frame(width: size.width, height: size.height)
+        }
+    }
+
+    private func statusTitle(_ cue: PetStatusCue) -> String {
+        switch cue {
+        case .greeting: l10n.string(vi: "Xin chào", en: "Hello")
+        case .downloaded: l10n.string(vi: "Tải xong", en: "Downloaded")
+        case .lowBattery: l10n.string(vi: "Pin yếu", en: "Low battery")
+        case .charging: l10n.string(vi: "Đang sạc", en: "Charging")
+        case .downloadError: l10n.string(vi: "Tải lỗi", en: "Download error")
+        case .dancing: l10n.string(vi: "Quẩy nhạc", en: "Dance")
+        case .love: l10n.string(vi: "Yêu bạn", en: "Love")
+        case .sleeping: l10n.string(vi: "Ngủ ngon", en: "Sleeping")
+        case .muted: l10n.string(vi: "Đã tắt mic", en: "Mic muted")
+        case .ready: l10n.string(vi: "Sẵn sàng", en: "Ready")
         }
     }
 

@@ -90,6 +90,7 @@ struct PetLook: Equatable {
 
 /// Tâm trạng và biểu cảm cơ bản của thú cưng.
 enum PetMood: String, CaseIterable, Identifiable {
+    case exhausted, sleeping, charging, muted, downloadError
     case idle
     case happy
     case wink
@@ -104,6 +105,28 @@ enum PetMood: String, CaseIterable, Identifiable {
     case alert
 
     var id: String { rawValue }
+}
+
+/// Nhãn ngắn xuất hiện cùng hoạt cảnh trên notch/capsule.
+enum PetStatusCue: String, Identifiable {
+    case greeting, downloaded, lowBattery, charging, downloadError, dancing, love, sleeping, muted, ready
+
+    var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .greeting: "hand.wave.fill"
+        case .downloaded: "arrow.down.circle.fill"
+        case .lowBattery: "battery.25percent"
+        case .charging: "bolt.fill"
+        case .downloadError: "exclamationmark.arrow.triangle.2.circlepath"
+        case .dancing: "music.note"
+        case .love: "heart.fill"
+        case .sleeping: "moon.zzz.fill"
+        case .muted: "mic.slash.fill"
+        case .ready: "sparkles"
+        }
+    }
 }
 
 /// Vị trí cánh tai thỏ nơi thú cưng đậu (trái hoặc phải camera).
@@ -178,86 +201,11 @@ enum PetReaction: String, CaseIterable {
     }
 }
 
-/// Các thời khắc sự kiện mà hệ thống SenseBar kích hoạt phản ứng cho thú cưng.
-enum PetMoment: String, CaseIterable, Identifiable {
-    case visit, timerStarted, timeIsUp, music, agents, eventStarts, downloadFinished, downloadFailed, screenshot,
-         micMuted, keepAwake, charging, lowBattery, unlocked
-
-    var id: String { rawValue }
-
-    /// Phản ứng cảm xúc tương ứng với sự kiện.
-    var reaction: PetReaction? {
-        switch self {
-        case .visit:            return nil
-        case .timerStarted:     return .ready
-        case .timeIsUp:         return .surprised
-        case .music:            return .groove
-        case .agents:           return .ready
-        case .eventStarts:      return .bounce
-        case .downloadFinished: return .celebrate
-        case .downloadFailed:   return .confused
-        case .screenshot:       return .flash
-        case .micMuted:         return .hush
-        case .keepAwake:        return .perk
-        case .charging:         return .love
-        case .lowBattery:       return .yawn
-        case .unlocked:         return .wakeUp
-        }
-    }
-
-    /// Phản ứng tiếp nối cho chuỗi sự kiện hai nhịp.
-    var followUp: PetReaction? {
-        self == .agents ? .celebrate : nil
-    }
-
-    /// Biểu tượng SF Symbols đại diện cho khoảnh khắc trong bảng Cài đặt.
-    var symbol: String {
-        switch self {
-        case .visit:            return "figure.walk"
-        case .timerStarted:     return "timer"
-        case .timeIsUp:         return "alarm"
-        case .music:            return "music.note"
-        case .agents:           return "sparkles"
-        case .eventStarts:      return "calendar"
-        case .downloadFinished: return "arrow.down.circle"
-        case .downloadFailed:   return "exclamationmark.triangle"
-        case .screenshot:       return "camera.viewfinder"
-        case .micMuted:         return "mic.slash"
-        case .keepAwake:        return "cup.and.saucer"
-        case .charging:         return "bolt"
-        case .lowBattery:       return "battery.25percent"
-        case .unlocked:         return "lock.open"
-        }
-    }
-}
-
 /// Sự kiện phản ứng được phát cho thú cưng hiển thị.
 struct PetReactionEvent: Equatable {
     let id: UUID
     let reaction: PetReaction
     let start: CFTimeInterval
-}
-
-/// Bộ lọc tiết chế tần suất phản ứng của thú cưng, giữ cho các biểu cảm tự nhiên và không gây phiền.
-struct PetReactionGate {
-    /// Khoảng cách tối thiểu giữa 2 phản ứng bất kỳ (giây).
-    static let spacing: TimeInterval = 2.5
-    /// Thời gian tối thiểu trước khi lặp lại cùng một phản ứng (giây).
-    static let repeatInterval: TimeInterval = 30.0
-    /// Thời gian tối đa giữ sự kiện chờ hiển thị (giây).
-    static let patience: TimeInterval = 8.0
-
-    private(set) var last: (reaction: PetReaction, time: TimeInterval)?
-
-    /// Kiểm tra xem phản ứng có được phép kích hoạt tại mốc thời gian hay không.
-    mutating func admits(_ reaction: PetReaction, at time: TimeInterval) -> Bool {
-        if let last {
-            if time - last.time < Self.spacing { return false }
-            if last.reaction == reaction, time - last.time < Self.repeatInterval { return false }
-        }
-        last = (reaction, time)
-        return true
-    }
 }
 
 // MARK: - 3. Cấu trúc Khuôn mặt & Biểu cảm Mắt (Facial Layout & Expressions)
@@ -294,6 +242,16 @@ extension PetMood {
     /// Biểu cảm mắt và cử chỉ tương ứng với từng tâm trạng của thú cưng.
     var expression: PetExpression {
         switch self {
+        case .downloadError:
+            return PetExpression(left: .wide, right: .squint, tilt: 0.14)
+        case .exhausted:
+            return PetExpression(left: .sleepy, right: .sleepy, tilt: 0.18)
+        case .sleeping:
+            return PetExpression(left: .closed, right: .closed, tilt: 0.08)
+        case .charging:
+            return PetExpression(left: .happy, right: .happy)
+        case .muted:
+            return PetExpression(left: .open, right: .open)
         case .idle:
             return PetExpression(left: .open, right: .open)
         case .happy:
@@ -1201,29 +1159,8 @@ enum PetMotion {
 
 /// Bộ điều phối hỗ trợ quản lý cấu hình, định thời gian và tính toán kích cỡ SenseBar cho thú cưng.
 enum PetEngine {
-    /// Độ trễ trước khi thú cưng chào khi vừa kích hoạt trong Cài đặt (giây).
-    static let welcomeDelay: TimeInterval = 1.5
-    /// Khoảng thời gian tối thiểu giữa hai lần nhún nhảy theo nhạc (tránh phiền hà khi đổi bài liên tục).
-    static let grooveInterval: TimeInterval = 600.0
-    /// Thời gian chờ thanh phát nhạc ổn định trước khi thú cưng xuất hiện nhảy múa.
-    static let grooveDelay: TimeInterval = 1.2
-    /// Khoảng cách tối thiểu giữa hai lần chào mừng agent AI bắt đầu tác vụ.
-    static let agentStartInterval: TimeInterval = 600.0
-
-    /// Thời gian không hoạt động trước khi thú cưng ẩn vào trong tai thỏ (giây).
-    static let hideDelay: TimeInterval = 30.0
-    /// Thời gian thử lại việc ẩn đi nếu người dùng đang rê chuột qua đảo.
-    static let hideRetry: TimeInterval = 3.0
-    /// Hành động ngáp ngủ và rút lui khi ẩn đi lúc rảnh rỗi.
-    static let hideAway = PetVisit.Kind.linger(.yawn)
-
     /// Danh sách các tâm trạng chào đón thân thiện.
     static let greetings: [PetMood] = [.happy, .wink, .love]
-
-    /// Xác định phản ứng khi trạng thái nguồn điện của máy Mac thay đổi.
-    static func powerReaction(pluggedIn: Bool, charged: Bool, low: Bool) -> PetReaction? {
-        pluggedIn ? .love : charged ? .celebrate : low ? .yawn : nil
-    }
 
     /// Khoảng thời gian giữa hai lần chớp mắt ngẫu nhiên.
     static func blinkInterval(lowPower: Bool) -> ClosedRange<TimeInterval> {
@@ -1233,50 +1170,14 @@ enum PetEngine {
     /// Tỷ lệ liếc nhìn sang bên trước khi chớp mắt (khoảng 25% các lần chớp mắt).
     static let glanceChance = 0.25
 
-    /// Số lần chớp mắt trước khi mí mắt trĩu nặng buồn ngủ theo giờ sinh học.
-    static func blinksBeforeSleep(hour: Int) -> Int {
-        hour >= 22 || hour < 6 ? 12 : 36
-    }
+    /// Khoảng nghỉ tối thiểu giữa hai lần vuốt ve.
+    static let pettingRepeatInterval: TimeInterval = 30
 
     // MARK: - Truy xuất Cấu hình UserDefaults
-
-    /// Kiểm tra tính năng thú cưng có đang bật hay không.
-    static func isEnabled(in defaults: UserDefaults = .standard) -> Bool {
-        defaults.bool(forKey: DefaultsKey.petEnabled)
-    }
-
-    /// Kiểm tra tính năng tự động đi dạo có đang bật hay không.
-    static func visits(in defaults: UserDefaults = .standard) -> Bool {
-        isEnabled(in: defaults) && defaults.bool(forKey: DefaultsKey.petVisits)
-    }
-
-    /// Kiểm tra thú cưng có được phép phản ứng trước các sự kiện hệ thống không.
-    static func reacts(in defaults: UserDefaults = .standard) -> Bool {
-        isEnabled(in: defaults) && defaults.bool(forKey: DefaultsKey.petReactions)
-    }
-
-    /// Kiểm tra thú cưng có tự động ẩn đi khi không hoạt động hay không.
-    static func hidesWhenIdle(in defaults: UserDefaults = .standard) -> Bool {
-        isEnabled(in: defaults) && defaults.bool(forKey: DefaultsKey.petHidesWhenIdle)
-    }
 
     /// Lấy tần suất đi dạo từ cấu hình đã lưu.
     static func visitFrequency(in defaults: UserDefaults = .standard) -> PetVisitFrequency {
         PetVisitFrequency(rawValue: defaults.string(forKey: DefaultsKey.petVisitFrequency) ?? "") ?? .normal
-    }
-
-    /// Lấy vị trí cánh đậu (trái hoặc phải) từ cấu hình.
-    static func side(in defaults: UserDefaults = .standard) -> PetSide {
-        PetSide(rawValue: defaults.string(forKey: DefaultsKey.petSide) ?? "") ?? .left
-    }
-
-    /// Lấy cấu hình ngoại hình hiện tại của thú cưng từ UserDefaults.
-    static func look(in defaults: UserDefaults = .standard) -> PetLook {
-        PetLook(
-            style: PetStyle(rawValue: defaults.string(forKey: DefaultsKey.petStyle) ?? "") ?? .minimal,
-            shape: PetShape(rawValue: defaults.string(forKey: DefaultsKey.petShape) ?? "") ?? .ball,
-            palette: PetPalette(rawValue: defaults.string(forKey: DefaultsKey.petPalette) ?? "") ?? .pearl
-        )
     }
 
     // MARK: - Toạ độ & Tương tác Con trỏ Chuột
@@ -1348,9 +1249,4 @@ enum PetEngine {
         )
     }
 
-    /// Khoảng đệm an toàn mà cánh tai thỏ giữ ngoài biên để thú cưng xuất hiện.
-    static let wingRoom: CGFloat = 10.0
-
-    /// Kích cỡ chuẩn của thú cưng khi đứng trong thông báo hệ thống.
-    static let noticeSize: CGFloat = 18.0
 }

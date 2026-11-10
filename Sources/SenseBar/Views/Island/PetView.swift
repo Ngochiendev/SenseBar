@@ -52,10 +52,10 @@ final class PetRig: NSObject {
     private let face = CALayer()
     private let leftEye = CAShapeLayer()
     private let rightEye = CAShapeLayer()
+    private let prop = CAShapeLayer()
+    private let mouth = CAShapeLayer()
+    private let sleepText = CATextLayer()
     private var blinks = 0
-    /// It grew sleepy on its own after a long rest, rather than being shown
-    /// so, and anything that happens wakes it.
-    private var dozed = false
     /// When its eyes last went after something: a pointer, a drag or typing.
     private var attended: CFTimeInterval = -.infinity
     /// When the visit it plays is over, on the media clock.
@@ -75,6 +75,12 @@ final class PetRig: NSObject {
         attention.addSublayer(face)
         face.addSublayer(leftEye)
         face.addSublayer(rightEye)
+        tilter.addSublayer(prop)
+        face.addSublayer(mouth)
+        tilter.addSublayer(sleepText)
+        sleepText.actions = Self.noActions
+        prop.actions = Self.noActions
+        mouth.actions = Self.noActions
         fill.mask = fillMask
         for layer in [root, hopper, squasher, tilter, attention, face, ears, antenna, bulb, fill, fillMask, visor, shine,
                       leftEye, rightEye] {
@@ -168,6 +174,7 @@ final class PetRig: NSObject {
         leftEye.contentsScale = scale
         rightEye.contentsScale = scale
         apply(mood.expression, animated: false)
+        configureExpressionDetails()
     }
 
     // MARK: Faces
@@ -176,9 +183,9 @@ final class PetRig: NSObject {
         guard mood != self.mood else { return }
         let previous = self.mood
         self.mood = mood
-        dozed = false
         if mood != .sleepy { blinks = 0 }
         apply(mood.expression, animated: animated && !reduceMotion)
+        configureExpressionDetails()
         lightBulb(mood != .sleepy, animated: animated && !reduceMotion)
         guard animated, !reduceMotion, size > 0 else { syncBlinking(); return }
         switch mood {
@@ -189,6 +196,72 @@ final class PetRig: NSObject {
         default: break
         }
         syncBlinking()
+    }
+
+    /// Vẽ đạo cụ cùng hệ tọa độ với thân để biểu cảm nhất quán ở mọi kích thước.
+    private func configureExpressionDetails() {
+        prop.removeAllAnimations()
+        mouth.removeAllAnimations()
+        sleepText.string = mood == .sleeping ? "zzz" : nil
+        sleepText.font = NSFont.boldSystemFont(ofSize: max(4, size * 0.18))
+        sleepText.fontSize = max(4, size * 0.18)
+        sleepText.foregroundColor = NSColor.white.cgColor
+        sleepText.contentsScale = root.contentsScale
+        sleepText.frame = CGRect(x: size * 0.57, y: size * 0.02, width: size * 0.42, height: size * 0.24)
+        let path = CGMutablePath()
+        let lips = CGMutablePath()
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * size, y: y * size) }
+        func line(_ x: CGFloat, _ y: CGFloat, _ x2: CGFloat, _ y2: CGFloat) {
+            path.move(to: p(x, y)); path.addLine(to: p(x2, y2))
+        }
+        var color = NSColor.systemTeal
+        switch mood {
+        case .sleeping:
+            path.move(to: p(0.4, 0.02))
+            path.addCurve(to: p(0.54, 0.26), control1: p(0.22, 0.01), control2: p(0.27, 0.34))
+            path.addCurve(to: p(0.4, 0.02), control1: p(0.36, 0.25), control2: p(0.34, 0.12))
+            path.closeSubpath()
+            color = .systemYellow
+        case .charging:
+            path.move(to: p(0.57, 0.01)); path.addLine(to: p(0.39, 0.18))
+            path.addLine(to: p(0.51, 0.18)); path.addLine(to: p(0.43, 0.34))
+            color = .systemYellow
+        case .downloadError:
+            // Mũi tên tải xuống và dấu x, không dùng biểu tượng lỗi chung.
+            line(0.38, 0.01, 0.38, 0.22)
+            line(0.29, 0.14, 0.38, 0.22)
+            line(0.47, 0.14, 0.38, 0.22)
+            line(0.64, 0.08, 0.78, 0.22)
+            line(0.78, 0.08, 0.64, 0.22)
+            color = .systemRed
+        case .exhausted:
+            lips.move(to: p(0.43, 0.75)); lips.addQuadCurve(to: p(0.59, 0.75), control: p(0.5, 0.66))
+        case .muted:
+            // Ngón tay trước miệng thay cho một icon mic rời rạc.
+            line(0.52, 0.64, 0.52, 0.86)
+            color = .systemPink
+        default: break
+        }
+        prop.path = path
+        prop.lineWidth = max(0.8, size * 0.035)
+        prop.lineCap = .round
+        prop.lineJoin = .round
+        prop.strokeColor = color.cgColor
+        prop.fillColor = mood == .sleeping ? color.cgColor : NSColor.clear.cgColor
+        mouth.path = lips
+        mouth.strokeColor = (look.style == .robot ? look.palette.light : PetColor.ink).cgColor
+        mouth.fillColor = NSColor.clear.cgColor
+        mouth.lineWidth = max(0.7, size * 0.03)
+        guard !reduceMotion else { return }
+        if mood == .sleeping || mood == .charging {
+            let breath = CABasicAnimation(keyPath: "opacity")
+            breath.fromValue = 0.35
+            breath.toValue = 1
+            breath.duration = mood == .sleeping ? 1.6 : 0.65
+            breath.autoreverses = true
+            breath.repeatCount = .infinity
+            prop.add(breath, forKey: "expressionBreath")
+        }
     }
 
     private func eyePath(_ eye: PetEye, right: Bool) -> CGPath {
@@ -278,7 +351,6 @@ final class PetRig: NSObject {
         attention.transform = CATransform3DIdentity
         self.mood = mood
         blinks = 0
-        dozed = false
         apply(mood.expression, animated: false)
     }
 
@@ -310,9 +382,6 @@ final class PetRig: NSObject {
         for layer in [root, squasher, face] { layer.removeAnimation(forKey: "visit") }
         root.removeAnimation(forKey: "visitFade")
     }
-    /// It grew sleepy on its own after a long rest.
-    var isDozing: Bool { dozed }
-
     /// Turns its eyes toward `target`, in shares of its size, on top of the
     /// face it keeps. With `hold`, they stay that long and come back, so
     /// keys typed in a row keep them there. Without it, they stay. Each turn
@@ -424,17 +493,6 @@ final class PetRig: NSObject {
         CATransaction.commit()
     }
 
-    /// Lit already, the bulb shows dark a moment longer, then lights.
-    private func relightBulb(after delay: TimeInterval) {
-        guard look.style == .robot else { return }
-        let dark = look.palette.shade.cgColor
-        let light = CAKeyframeAnimation(keyPath: "fillColor")
-        light.values = [dark, dark, look.palette.light.cgColor]
-        light.keyTimes = [0, NSNumber(value: delay / (delay + 0.3)), 1]
-        light.duration = delay + 0.3
-        bulb.add(light, forKey: "light")
-    }
-
     /// A reaction lights the robot's bulb up with a soft glow for as long as it plays.
     private func glowBulb(for duration: TimeInterval) {
         guard look.style == .robot else { return }
@@ -502,8 +560,6 @@ final class PetRig: NSObject {
     /// Reduce Motion it only changes face.
     func react(_ reaction: PetReaction, lift: CGFloat) {
         guard size > 0 else { return }
-        // Whatever it is, it wakes up for it.
-        if dozed, reaction != .wakeUp { setMood(.idle, animated: !reduceMotion) }
         blinks = 0
         let now = CACurrentMediaTime()
         glowBulb(for: reaction.length)
@@ -543,13 +599,8 @@ final class PetRig: NSObject {
             flashFace(.confused, duration: 1.2)
             wobble()
         case .wakeUp:
-            // Heavy eyes, a stretch, and a glad face. A robot's bulb lights
-            // up again as it stretches.
-            if dozed {
-                setMood(.idle, animated: false)
-                relightBulb(after: 0.35)
-            }
-            flashFace(.sleepy, duration: 0.7)
+            // A short stretch followed by a glad face.
+            flashFace(.wink, duration: 0.7)
             stretch(beginTime: now + 0.35, duration: 0.6)
             flashFace(.happy, duration: 0.9, beginTime: now + 0.7, key: "flashAfter")
         case .yawn:
@@ -744,14 +795,13 @@ final class PetRig: NSObject {
         self.idles = wanted
         if !wanted {
             stopBlinking()
-            if dozed, !idles { setMood(.idle, animated: false) }
         } else { syncBlinking() }
     }
 
-    /// Wakes it from a long rest. A face shown sleepy on purpose stays.
-    func wake(animated: Bool) {
+    /// Restarts blinking after pointer attention.
+    func wake() {
         blinks = 0
-        if dozed { setMood(.idle, animated: animated) }
+        syncBlinking()
     }
 
     private func syncBlinking() {
@@ -823,12 +873,7 @@ final class PetRig: NSObject {
         guard finished, relay === blinkRelay, idles else { return }
         blinkRelay = nil
         blinks += 1
-        // A long rest makes its eyes heavy, and it stops blinking then.
-        if mood == .idle, blinks >= PetEngine.blinksBeforeSleep(hour: Calendar.current.component(.hour, from: Date())) {
-            setMood(.sleepy, animated: true)
-            dozed = true
-            return
-        }
+        // Thời điểm ngủ do PetService quyết định từ thời gian không thao tác toàn máy.
         syncBlinking()
     }
 }
@@ -1005,9 +1050,9 @@ final class PetHostView: NSView {
         follow(event)
     }
 
-    /// The pointer coming back wakes it, with a stretch from a doze.
+    /// The pointer coming back resumes its idle attention.
     private func greetPointer() {
-        if mascot.isDozing, !mascot.isVisiting { mascot.react(.wakeUp, lift: 0) } else { mascot.wake(animated: true) }
+        mascot.wake()
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -1032,7 +1077,7 @@ final class PetHostView: NSView {
             return
         }
         guard pettingWork == nil,
-              CACurrentMediaTime() - lastPetting > PetReactionGate.repeatInterval else { return }
+              CACurrentMediaTime() - lastPetting > PetEngine.pettingRepeatInterval else { return }
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pettingWork = nil
@@ -1177,7 +1222,7 @@ final class PetHostView: NSView {
         guard visit.id != playedVisit else { return }
         playedVisit = visit.id
         cameoWork?.cancel(); cameoWork = nil
-        mascot.wake(animated: false)
+        mascot.wake()
         mascot.playVisit(path(), greeting: visit.greeting, baseline: baseline, stand: stand, start: visit.start,
                          holdsEnd: visit.kind.endsOutOfSight)
         guard let reaction = visit.kind.reaction else { return }

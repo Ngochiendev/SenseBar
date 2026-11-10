@@ -148,7 +148,6 @@ final class IslandController: ObservableObject {
             DefaultsKey.petPalette: "pearl",
             DefaultsKey.petSide: "left",
             DefaultsKey.petVisits: true,
-            DefaultsKey.petReactions: true,
             DefaultsKey.petVisitFrequency: "normal"
         ])
     }

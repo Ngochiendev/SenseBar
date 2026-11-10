@@ -37,8 +37,6 @@ enum DefaultsKey {
     static let petPalette = "sensebar.notch.mascotPalette" // "pearl", "lemon", "peach", "rose", "lilac", "sky", "mint"
     static let petSide = "sensebar.notch.mascotSide" // "left" hoặc "right"
     static let petVisits = "sensebar.notch.mascotVisits"
-    static let petReactions = "sensebar.notch.mascotReactions"
-    static let petHidesWhenIdle = "sensebar.notch.mascotHidesWhenIdle"
     static let petVisitFrequency = "sensebar.notch.mascotVisitFrequency" // "rare", "normal", "frequent"
 
     // Cập nhật phiên bản
