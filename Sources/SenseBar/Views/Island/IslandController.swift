@@ -168,6 +168,10 @@ final class IslandController: ObservableObject {
         if expanded ?? isExpanded {
             return geo.expandedSize
         }
+        if DeviceNoticeService.shared.current != nil {
+            return CGSize(width: geo.isNotched ? min(Self.canvasWidth, max(320, geo.cameraWidth + 150)) : 296,
+                          height: geo.isNotched ? geo.cameraHeight + 34 : usesCapsule(on: screen) ? 48 : 50)
+        }
         let fitWidth = UserDefaults.standard.double(forKey: DefaultsKey.notchCapsuleFitWidth)
         let fitHeight = UserDefaults.standard.double(forKey: DefaultsKey.notchCapsuleFitHeight)
         let isPlaying = MusicService.shared.track?.isPlaying == true
@@ -216,6 +220,7 @@ final class IslandController: ObservableObject {
 
     /// Khởi động hệ thống Dynamic Island, lắng nghe sự kiện chuột, nhạc và màn hình.
     func start() {
+        guard SensePillar.dynamicIsland.isEnabled() else { return }
         _ = MusicService.shared
         setupPanelIfNeeded()
         syncFullscreenMonitoring()
@@ -227,6 +232,10 @@ final class IslandController: ObservableObject {
     func syncVisibility() {
         let enabled = SensePillar.dynamicIsland.isEnabled()
         guard enabled else {
+            if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor); self.mouseMonitor = nil }
+            if let localMouseMonitor { NSEvent.removeMonitor(localMouseMonitor); self.localMouseMonitor = nil }
+            hoverWorkItem?.cancel()
+            collapseWorkItem?.cancel()
             mainPanel?.orderOut(nil)
             closeAllMirrors()
             syncFullscreenMonitoring()
@@ -295,6 +304,7 @@ final class IslandController: ObservableObject {
     // MARK: - Quản lý Cửa sổ & Đa màn hình (Displays: Automatic, BuiltIn, Main, Pointer, All)
 
     private func setupPanelIfNeeded() {
+        guard SensePillar.dynamicIsland.isEnabled() else { return }
         guard mainPanel == nil else { return }
 
         let activeScreen = targetScreenForActivePanel
@@ -614,6 +624,7 @@ final class IslandController: ObservableObject {
     }
 
     private func startMouseTracking() {
+        guard SensePillar.dynamicIsland.isEnabled() else { return }
         if mouseMonitor == nil {
             mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .leftMouseDragged]) { [weak self] event in
                 self?.handleMouseEvent(type: event.type)
@@ -674,7 +685,7 @@ final class IslandController: ObservableObject {
             collapseWorkItem?.cancel()
             collapseWorkItem = nil
             // Chỉ mở rộng khi rê chuột nếu đang có bài hát đang phát
-            if expandOnHover && !isExpanded && isMusicPlaying {
+            if expandOnHover && !isExpanded && isMusicPlaying && DeviceNoticeService.shared.current == nil {
                 scheduleHoverExpand(after: 0.08)
             }
         } else {
@@ -697,6 +708,7 @@ final class IslandController: ObservableObject {
             self.hoverWorkItem = nil
             guard SensePillar.dynamicIsland.isEnabled(),
                   !self.isExpanded,
+                  DeviceNoticeService.shared.current == nil,
                   UserDefaults.standard.bool(forKey: DefaultsKey.notchExpandOnHover),
                   MusicService.shared.track?.isPlaying == true,
                   self.isPointInsideIsland(NSEvent.mouseLocation) else {

@@ -48,7 +48,24 @@ struct MenuPanelView: View {
 
     var body: some View {
         Group {
-            if showingSettings {
+            if !permissions.allRequiredGranted || !UserDefaults.standard.bool(forKey: DefaultsKey.hasOnboarded) {
+                VStack(spacing: 16) {
+                    BrandBadge(size: 42)
+                    Text(l10n.string(vi: "Hoàn tất thiết lập SenseBar", en: "Finish setting up SenseBar"))
+                        .font(.system(size: 16, weight: .semibold))
+                    Text(l10n.string(vi: "Cấp quyền Trợ năng trong cửa sổ thiết lập để bắt đầu sử dụng.", en: "Grant Accessibility access in setup to start using SenseBar."))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button(l10n.string(vi: "Mở thiết lập", en: "Open setup")) {
+                        _ = NSApp.delegate?.applicationShouldHandleReopen?(NSApp, hasVisibleWindows: false)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button(l10n.string(vi: "Thoát SenseBar", en: "Quit SenseBar"), action: onQuit)
+                        .buttonStyle(.plain)
+                }
+                .padding(.vertical, 24)
+            } else if showingSettings {
                 PopoverSettingsView(
                     onBack: {
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {

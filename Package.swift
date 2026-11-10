@@ -12,8 +12,15 @@ let package = Package(
         .library(name: "SenseBarNowPlaying", type: .dynamic, targets: ["NowPlayingBridge"])
     ],
     targets: [
+        .target(
+            name: "SenseBarAudioBridge",
+            path: "Sources/SenseBarAudioBridge",
+            publicHeadersPath: "include",
+            linkerSettings: [.linkedFramework("CoreAudio")]
+        ),
         .executableTarget(
             name: "SenseBar",
+            dependencies: ["SenseBarAudioBridge"],
             path: "Sources/SenseBar"
         ),
         .target(

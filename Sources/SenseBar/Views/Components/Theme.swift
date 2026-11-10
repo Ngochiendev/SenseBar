@@ -49,11 +49,11 @@ enum PanelSurface {
     }
 
     static func baseFill(for scheme: ColorScheme) -> Color {
-        scheme == .light ? Color.white.opacity(0.68) : Color.black.opacity(0.42)
+        scheme == .light ? Color.white : Color(nsColor: .windowBackgroundColor)
     }
 
     static func cardFill(for scheme: ColorScheme) -> Color {
-        scheme == .light ? Color.white.opacity(0.45) : Color.white.opacity(0.075)
+        scheme == .light ? Color.white : Color.white.opacity(0.075)
     }
 
     static func border(for scheme: ColorScheme) -> Color {
@@ -78,6 +78,7 @@ extension View {
 private struct PanelCardModifier: ViewModifier {
     var padded = true
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage(DefaultsKey.liquidGlassEnabled) private var liquidGlassEnabled: Bool = true
 
     func body(content: Content) -> some View {
@@ -87,37 +88,10 @@ private struct PanelCardModifier: ViewModifier {
         content
             .padding(padded ? 12 : 0)
             .background {
-                if liquidGlassEnabled {
-                    ZStack {
-                        // Kính mờ siêu mỏng hardware-accelerated cho Intel & macOS 14/15
-                        shape.fill(.ultraThinMaterial)
-
-                        // Lớp phủ màu kính mờ xuyên thấu
-                        shape.fill(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: Color.white.opacity(isLight ? 0.40 : 0.08), location: 0.0),
-                                    .init(color: Color.white.opacity(isLight ? 0.18 : 0.03), location: 1.0)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-
-                        // Vệt phản chiếu ánh sáng kính nhẹ ở đỉnh
-                        shape.fill(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: Color.white.opacity(isLight ? 0.32 : 0.12), location: 0.0),
-                                    .init(color: Color.clear, location: 0.45)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                    }
-                } else {
+                if isLight || !liquidGlassEnabled || reduceTransparency {
                     shape.fill(PanelSurface.cardFill(for: colorScheme))
+                } else {
+                    panelSurface(shape: shape, isLight: isLight)
                 }
             }
             .overlay(
@@ -137,6 +111,43 @@ private struct PanelCardModifier: ViewModifier {
                 )
             )
     }
+
+    @ViewBuilder
+    private func panelSurface(shape: RoundedRectangle, isLight: Bool) -> some View {
+        ZStack {
+            #if compiler(>=6.2)
+            if #available(macOS 26.0, *) {
+                Color.clear.glassEffect(.regular, in: shape)
+            } else {
+                shape.fill(PanelSurface.cardFill(for: colorScheme))
+            }
+            #else
+            shape.fill(PanelSurface.cardFill(for: colorScheme))
+            #endif
+
+            // Static tonal layers preserve depth on older Macs without a live blur pass.
+            shape.fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.white.opacity(isLight ? 0.34 : 0.08), location: 0.0),
+                        .init(color: Color.white.opacity(isLight ? 0.12 : 0.025), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            shape.fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.white.opacity(isLight ? 0.24 : 0.10), location: 0.0),
+                        .init(color: Color.clear, location: 0.42)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+        }
+    }
 }
 
 private struct PanelGlassSurface: View {
@@ -145,11 +156,10 @@ private struct PanelGlassSurface: View {
     var body: some View {
         if PanelSurface.popoverHostsFullSizeContent {
             Rectangle()
-                .fill(.regularMaterial)
-                .overlay(Rectangle().fill(PanelSurface.baseFill(for: colorScheme)))
+                .fill(PanelSurface.baseFill(for: colorScheme))
                 .ignoresSafeArea()
         } else {
-            Color.clear
+            PanelSurface.baseFill(for: colorScheme)
         }
     }
 }

@@ -83,11 +83,15 @@ final class PermissionManager: ObservableObject {
         }
         // Khi vừa được cấp quyền (người dùng vừa bật toggle trong System Settings)
         if !wasGranted && axTrusted {
-            stopMonitoring()
-            PermissionGuideOverlay.shared.dismiss()
+            PermissionGuideOverlay.shared.complete()
             DispatchQueue.main.async {
                 IslandController.shared.permissionDidGrant()
             }
+        }
+        if wasGranted && !axTrusted {
+            NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: nil)
+            IslandController.shared.syncVisibility()
+            AudioStudioService.shared.refreshAll()
         }
     }
 

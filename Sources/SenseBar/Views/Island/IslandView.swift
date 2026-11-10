@@ -59,6 +59,8 @@ struct IslandView: View {
     @ObservedObject var audio = AudioStudioService.shared
     @ObservedObject var pet = PetService.shared
     @ObservedObject var l10n = L10n.shared
+    @ObservedObject private var notices = DeviceNoticeService.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
     @AppStorage(DefaultsKey.notchShowVisualizer) private var showVisualizer: Bool = true
@@ -103,6 +105,7 @@ struct IslandView: View {
 
             islandContainer(size: size, isPill: isPill, geo: currentGeo)
                 .frame(width: size.width, height: size.height, alignment: .top)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: notices.current?.id)
                 .padding(.top, topOffset)
                 .animation(.spring(response: 0.42, dampingFraction: 0.72), value: isViewExpanded)
                 .animation(.spring(response: 0.42, dampingFraction: 0.72), value: music.track?.isPlaying)
@@ -242,7 +245,9 @@ struct IslandView: View {
                 )
             }
 
-            if expanded {
+            if let notice = notices.current, !expanded {
+                deviceNotice(notice, size: size, isPill: isPill, geo: geo)
+            } else if expanded {
                 expandedContent
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
             } else {
@@ -269,8 +274,8 @@ struct IslandView: View {
     @ViewBuilder
     private func classicGlassBackground<S: Shape>(_ shape: S) -> some View {
         ZStack {
-            NotchTranslucentMaterial(cornerRadius: 24)
-
+            // macOS 14–15 fallback is deliberately static: no continuously sampled
+            // desktop blur, keeping the expanded island inexpensive on older GPUs.
             shape.fill(
                 LinearGradient(
                     stops: [
@@ -313,6 +318,12 @@ struct IslandView: View {
     }
 
     // MARK: - Trạng thái Thu gọn (Compact)
+
+    private func deviceNotice(_ notice: IslandDeviceNotice, size: CGSize, isPill: Bool,
+                              geo: ScreenGeometry) -> some View {
+        DeviceNoticeView(notice: notice, size: size, geometry: geo, isPill: isPill)
+            .id(notice.id)
+    }
 
     @ViewBuilder
     private func compactContent(size: CGSize, isPill: Bool, geo: ScreenGeometry) -> some View {
@@ -420,7 +431,9 @@ struct IslandView: View {
                                         .truncationMode(.tail)
                                 }
                             }
+                            .padding(.horizontal, 8)
                             .frame(width: geo.cameraWidth)
+                            .clipped()
                         }
 
                         HStack(spacing: 0) {

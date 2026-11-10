@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         BrandIconResources.applyApplicationIcon()
         IslandController.shared.start()
+        DeviceNoticeService.shared.start()
         UpdateService.shared.start()
 
         menuBarController = MenuBarController(
@@ -20,7 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let forceWelcome = CommandLine.arguments.contains("--welcome")
         let hasOnboarded = UserDefaults.standard.bool(forKey: DefaultsKey.hasOnboarded)
 
-        if forceWelcome || !hasOnboarded {
+        if forceWelcome || !hasOnboarded || !PermissionManager.shared.accessibilityGranted {
+            if hasOnboarded && !PermissionManager.shared.accessibilityGranted {
+                UserDefaults.standard.set(OnboardingStep.permissions.rawValue, forKey: DefaultsKey.onboardingStep)
+            }
             showWelcomeWindow(resetToFirstStep: forceWelcome)
         } else {
             // Khi người dùng bấm mở app (hoặc ấn "Mở" từ Gatekeeper), tự động hiển thị Popover
@@ -38,7 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         let hasOnboarded = UserDefaults.standard.bool(forKey: DefaultsKey.hasOnboarded)
-        if !hasOnboarded {
+        if !hasOnboarded || !PermissionManager.shared.accessibilityGranted {
+            if hasOnboarded { UserDefaults.standard.set(OnboardingStep.permissions.rawValue, forKey: DefaultsKey.onboardingStep) }
             showWelcomeWindow(resetToFirstStep: false)
         } else {
             menuBarController?.showPopover()
@@ -138,6 +143,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func finishOnboardingAndOpenPopover() {
+        guard PermissionManager.shared.accessibilityGranted else { return }
+        IslandController.shared.start()
+        IslandController.shared.syncVisibility()
+        AudioStudioService.shared.refreshAll()
         welcomeWindow?.close()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.menuBarController?.showPopover()

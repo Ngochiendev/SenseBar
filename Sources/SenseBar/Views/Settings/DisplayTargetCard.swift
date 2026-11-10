@@ -120,15 +120,10 @@ struct DisplayTargetCard: View {
 
                 Spacer()
 
-                ZStack {
-                    Circle()
-                        .stroke(isSelected ? Color.blue : Color.secondary.opacity(0.35), lineWidth: 1.2)
-                        .frame(width: 14, height: 14)
-                    if isSelected {
-                        Circle().fill(Color.blue).frame(width: 7, height: 7)
-                    }
-                }
+                selectionMark(isSelected: isSelected)
             }
+            .frame(minHeight: 42)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
@@ -141,5 +136,26 @@ struct DisplayTargetCard: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// A fixed trailing control keeps the selection affordance optically centred
+    /// regardless of the title and subtitle heights.
+    private func selectionMark(isSelected: Bool) -> some View {
+        Group {
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 18, height: 18)
+                    .background(Color.blue, in: Circle())
+            } else {
+                Circle()
+                    .strokeBorder(Color.secondary.opacity(0.32), lineWidth: 1)
+                    .frame(width: 18, height: 18)
+            }
+        }
+        .frame(width: 24, height: 24, alignment: .center)
+        .accessibilityHidden(true)
     }
 }

@@ -6,6 +6,8 @@ struct IslandStyleCard: View {
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var islandController = IslandController.shared
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
+    @AppStorage(DefaultsKey.notchDeviceNotices) private var deviceNotices = false
+    @AppStorage(DefaultsKey.notchLowPeripheralBattery) private var lowBattery = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -21,8 +23,61 @@ struct IslandStyleCard: View {
             if islandController.hasNotchedDisplay {
                 notchedDisplayNote
             }
+            VStack(spacing: 0) {
+                noticeToggle(
+                    l10n.string(vi: "Thông báo sạc & kết nối thiết bị", en: "Power & device connection alerts"),
+                    detail: l10n.string(
+                        vi: "Lần bật đầu có thể yêu cầu quyền Bluetooth để nhận diện phụ kiện.",
+                        en: "The first use may request Bluetooth access to identify accessories."
+                    ),
+                    isOn: $deviceNotices
+                )
+                Divider().opacity(0.35)
+                noticeToggle(
+                    l10n.string(vi: "Cảnh báo pin phụ kiện (20% và 10%)", en: "Accessory low battery (20% and 10%)"),
+                    isOn: $lowBattery
+                )
+                    .disabled(!deviceNotices)
+            }
+            HStack {
+                Spacer()
+                Menu {
+                    ForEach(DeviceNoticeService.Preview.allCases, id: \.self) { preview in
+                        Button(preview.title) { DeviceNoticeService.shared.preview(preview) }
+                    }
+                } label: {
+                    Label(l10n.string(vi: "Xem thử thông báo", en: "Preview alerts"), systemImage: "play.circle")
+                        .font(.system(size: 10.5, weight: .medium))
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .disabled(!deviceNotices)
+            }
         }
         .panelCard()
+    }
+
+    private func noticeToggle(_ title: String, detail: String? = nil, isOn: Binding<Bool>) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 11))
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle(title, isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .fixedSize()
+        }
+        .frame(maxWidth: .infinity, minHeight: 32)
+        .accessibilityElement(children: .combine)
     }
 
     /// Lưu ý: màn hình có tai thỏ thật luôn dùng Notch, lựa chọn trên chỉ áp dụng cho màn hình rời.

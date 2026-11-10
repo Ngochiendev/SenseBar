@@ -19,7 +19,7 @@ DerivedData/
 docs/
 .agents/
 .codegraph
-s-src/
+Tests/
 test/
 # Security & Apple Certificates
 *.p12

@@ -101,7 +101,7 @@ final class PermissionGuideOverlay {
         )
 
         let hosting = NSHostingView(rootView: guideView)
-        hosting.frame = NSRect(x: 0, y: 0, width: 340, height: 210)
+        hosting.frame = NSRect(x: 0, y: 0, width: 360, height: 254)
 
         let panel = NSPanel(
             contentRect: hosting.frame,
@@ -119,8 +119,8 @@ final class PermissionGuideOverlay {
 
         if let screen = NSScreen.main {
             let visible = screen.visibleFrame
-            let x = visible.maxX - 356
-            let y = visible.maxY - 226
+            let x = visible.maxX - 376
+            let y = visible.maxY - 270
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
 
@@ -138,7 +138,7 @@ final class PermissionGuideOverlay {
                 if PermissionManager.shared.isGranted(kind) {
                     self?.pollTimer?.invalidate()
                     self?.pollTimer = nil
-                    self?.scheduleDismiss(after: 1.4)
+                    self?.scheduleDismiss(after: 1.6)
                 }
             }
         }
@@ -159,6 +159,12 @@ final class PermissionGuideOverlay {
             }
         })
         self.panel = nil
+    }
+
+    func complete() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+        scheduleDismiss(after: 1.6)
     }
 
     private func scheduleDismiss(after seconds: TimeInterval) {
@@ -185,74 +191,24 @@ private struct PermissionGuideCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: isGranted ? "checkmark.circle.fill" : "hand.Draw.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(isGranted ? .green : .blue)
-                Text(l10n.string(vi: "Trợ năng (Accessibility)", en: "Accessibility"))
-                    .font(.system(size: 13, weight: .bold))
-                Spacer()
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Divider()
+        VStack(alignment: .leading, spacing: 14) {
+            header
 
             if isGranted {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.green)
-                    Text(l10n.string(
-                        vi: "Đã cấp quyền thành công! Cửa sổ này sẽ tự đóng.",
-                        en: "Permission granted! This card will close automatically."
-                    ))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.green)
-                }
-                .padding(.vertical, 8)
+                grantedContent
             } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    guideStep(1, l10n.string(
-                        vi: "Tìm \"SenseBar\" trong danh sách của Cài đặt Hệ thống.",
-                        en: "Find \"SenseBar\" in the System Settings list."
-                    ))
-                    guideStep(2, l10n.string(
-                        vi: "Gạt công tắc sang BẬT (ON) để hoàn tất.",
-                        en: "Toggle the switch ON to finish."
-                    ))
-                }
-
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(l10n.string(vi: "Đang chờ bạn bật công tắc...", en: "Waiting for you to enable..."))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if showResetOption {
-                        Button(l10n.string(vi: "Làm mới quyền", en: "Reset TCC"), action: onReset)
-                            .buttonStyle(.bordered)
-                            .controlSize(.mini)
-                    }
-                }
-                .padding(.top, 2)
+                setupContent
             }
         }
-        .padding(14)
-        .frame(width: 340)
+        .padding(16)
+        .frame(width: 360)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.regularMaterial)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(isGranted ? Color.green.opacity(0.45) : Color.primary.opacity(0.14), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(isGranted ? Color.green.opacity(0.42) : Color.blue.opacity(0.22), lineWidth: 1)
         )
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
@@ -263,15 +219,108 @@ private struct PermissionGuideCard: View {
         }
     }
 
+    private var header: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: isGranted ? "checkmark" : "hand.raised.fill")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(isGranted ? Color.green : Color.blue, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(l10n.string(vi: "Trợ năng", en: "Accessibility"))
+                    .font(.system(size: 13, weight: .bold))
+                Text(l10n.string(vi: "Mở khóa tương tác Dynamic Island", en: "Enable Dynamic Island interactions"))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .background(Color.primary.opacity(0.06), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(l10n.string(vi: "Đóng", en: "Close"))
+        }
+    }
+
+    private var grantedContent: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 27))
+                .foregroundStyle(.green)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(l10n.string(vi: "Đã sẵn sàng", en: "Ready to go"))
+                    .font(.system(size: 12, weight: .semibold))
+                Text(l10n.string(vi: "Quyền đã được cấp. Thẻ này sẽ tự đóng.", en: "Permission granted. This card will close automatically."))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var setupContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.mini)
+                Text(l10n.string(vi: "Đang chờ xác nhận trong Cài đặt Hệ thống", en: "Waiting for confirmation in System Settings"))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(Color.blue.opacity(0.08), in: Capsule())
+
+            VStack(alignment: .leading, spacing: 9) {
+                guideStep(1, l10n.string(
+                    vi: "Tìm “SenseBar” trong danh sách ứng dụng.",
+                    en: "Find “SenseBar” in the app list."
+                ))
+                guideStep(2, l10n.string(
+                    vi: "Bật công tắc bên phải để hoàn tất.",
+                    en: "Turn on the switch on the right to finish."
+                ))
+            }
+            .padding(12)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            Button {
+                PermissionManager.shared.openAccessibilitySettings()
+            } label: {
+                Label(l10n.string(vi: "Mở Cài đặt Trợ năng", en: "Open Accessibility Settings"), systemImage: "gearshape")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+
+            if showResetOption {
+                Button(l10n.string(vi: "Không thấy SenseBar? Làm mới yêu cầu", en: "Can't find SenseBar? Refresh request"), action: onReset)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
     private func guideStep(_ index: Int, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text("\(index)")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 17, height: 17)
+                .frame(width: 18, height: 18)
                 .background(Circle().fill(Color.blue))
             Text(text)
-                .font(.system(size: 12))
+                .font(.system(size: 11.5))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

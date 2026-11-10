@@ -19,9 +19,6 @@ final class PetService: ObservableObject {
 
     private var visitTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
-    private var powerRunLoopSource: CFRunLoopSource?
-    private var lastChargingState: Bool?
-    private var lastBatteryLevel: Int?
 
     private init() {
         syncPreferences()
@@ -37,47 +34,14 @@ final class PetService: ObservableObject {
     }
 
     private func startPowerMonitoring() {
-        let callback: IOPowerSourceCallbackType = { _ in
-            Task { @MainActor in
-                PetService.shared.checkPowerStateChanged()
-            }
-        }
-        if let source = IOPSNotificationCreateRunLoopSource(callback, nil)?.takeRetainedValue() {
-            CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
-            powerRunLoopSource = source
-        }
-        checkPowerStateChanged(initial: true)
-    }
-
-    private func checkPowerStateChanged(initial: Bool = false) {
-        guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let sources = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef] else {
-            return
-        }
-        for s in sources {
-            guard let desc = IOPSGetPowerSourceDescription(snapshot, s)?.takeUnretainedValue() as? [String: Any] else {
-                continue
-            }
-            let isCharging = (desc[kIOPSIsChargingKey as String] as? Bool) ?? ((desc[kIOPSIsChargingKey as String] as? Int) == 1)
-            let capacity = (desc[kIOPSCurrentCapacityKey as String] as? Int) ?? 100
-
-            if !initial, let last = lastChargingState {
-                if !last && isCharging {
-                    // Người dùng vừa cắm sạc pin -> Thú cưng thả tim vui sướng!
-                    react(.love)
-                }
-            }
-            lastChargingState = isCharging
-
-            if !initial, let lastLevel = lastBatteryLevel {
-                if capacity <= 20 && lastLevel > 20 && !isCharging {
-                    // Pin giảm xuống dưới 20% -> Thú cưng ngáp buồn ngủ
-                    react(.yawn)
-                }
-            }
-            lastBatteryLevel = capacity
-            break
-        }
+        MacPowerService.shared.$state.removeDuplicates()
+            .scan((nil as MacPowerState?, nil as MacPowerState?)) { ($0.1, $1) }
+            .sink { [weak self] before, next in
+                guard let self, let before, let next else { return }
+                if !before.external && next.external { self.react(.love) }
+                if let old = before.percent, let level = next.percent,
+                   old > 20, level <= 20, !next.external { self.react(.yawn) }
+            }.store(in: &cancellables)
     }
 
     /// Đồng bộ cài đặt từ UserDefaults.

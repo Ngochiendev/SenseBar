@@ -1,4 +1,5 @@
 import Foundation
+import ApplicationServices
 import ServiceManagement
 
 enum DefaultsKey {
@@ -14,6 +15,8 @@ enum DefaultsKey {
 
     // Tùy chỉnh Dynamic Island
     static let notchStyle = "sensebar.notch.style" // "notch" hoặc "pill"
+    static let notchDeviceNotices = "sensebar.notch.deviceNotices"
+    static let notchLowPeripheralBattery = "sensebar.notch.lowPeripheralBattery"
     static let notchExpandOnHover = "sensebar.notch.expandOnHover"
     static let notchShowVisualizer = "sensebar.notch.showVisualizer"
     static let notchHideInFullscreen = "sensebar.notch.hideInFullscreen"
@@ -80,6 +83,7 @@ enum SensePillar: String, CaseIterable, Identifiable {
     }
 
     func isEnabled(_ defaults: UserDefaults = .standard) -> Bool {
+        guard AXIsProcessTrusted(), defaults.bool(forKey: DefaultsKey.hasOnboarded) else { return false }
         if defaults.object(forKey: defaultsKey) == nil { return true }
         return defaults.bool(forKey: defaultsKey)
     }

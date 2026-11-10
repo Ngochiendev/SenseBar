@@ -1,0 +1,6 @@
+{
+  "includeIgnored": [
+    "Tests/",
+    "test/"
+  ]
+}
