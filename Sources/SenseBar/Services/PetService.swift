@@ -83,7 +83,16 @@ final class PetService: ObservableObject {
     /// Đồng bộ cài đặt từ UserDefaults.
     func syncPreferences() {
         let defaults = UserDefaults.standard
+        let wasEnabled = isEnabled
         isEnabled = defaults.bool(forKey: DefaultsKey.petEnabled)
+
+        if !isEnabled {
+            visitTimer?.invalidate()
+            visitTimer = nil
+            currentVisit = nil
+            currentReaction = nil
+            mood = .idle
+        }
 
         let newVisits = defaults.bool(forKey: DefaultsKey.petVisits)
         if visitsEnabled != newVisits {
@@ -92,9 +101,11 @@ final class PetService: ObservableObject {
                 visitTimer?.invalidate()
                 visitTimer = nil
                 currentVisit = nil
-            } else {
+            } else if isEnabled {
                 scheduleNextVisit()
             }
+        } else if !wasEnabled && isEnabled && visitsEnabled {
+            scheduleNextVisit()
         }
 
         let styleStr = defaults.string(forKey: DefaultsKey.petStyle) ?? "minimal"

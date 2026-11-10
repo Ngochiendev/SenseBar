@@ -49,7 +49,6 @@ final class MusicService: ObservableObject {
 
     private init() {
         start()
-        startElapsedTicker()
     }
 
     private static var dylibPath: String? {
@@ -189,23 +188,35 @@ final class MusicService: ObservableObject {
 
     // MARK: - Output Parsing & Elapsed Ticker
 
-    private func startElapsedTicker() {
-        tickTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+    private func startElapsedTickerIfNeeded() {
+        guard tickTimer == nil else { return }
+        lastSampleDate = Date()
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                if var current = self.track, current.isPlaying {
-                    let now = Date()
-                    let delta = now.timeIntervalSince(self.lastSampleDate)
-                    self.lastSampleDate = now
-                    if current.duration > 0 {
-                        current.elapsed = min(current.duration, current.elapsed + delta)
-                    } else {
-                        current.elapsed += delta
-                    }
-                    self.track = current
+                guard var current = self.track, current.isPlaying else {
+                    self.stopElapsedTicker()
+                    return
                 }
+                let now = Date()
+                let delta = now.timeIntervalSince(self.lastSampleDate)
+                self.lastSampleDate = now
+                if current.duration > 0 {
+                    current.elapsed = min(current.duration, current.elapsed + delta)
+                } else {
+                    current.elapsed += delta
+                }
+                self.track = current
             }
         }
+        timer.tolerance = 0.1
+        RunLoop.main.add(timer, forMode: .common)
+        tickTimer = timer
+    }
+
+    private func stopElapsedTicker() {
+        tickTimer?.invalidate()
+        tickTimer = nil
     }
 
     private func appendOutput(_ data: Data) {
@@ -256,6 +267,7 @@ final class MusicService: ObservableObject {
             DispatchQueue.main.async {
                 self.track = nil
                 self.artwork = nil
+                self.stopElapsedTicker()
             }
             return
         }
@@ -286,6 +298,11 @@ final class MusicService: ObservableObject {
         DispatchQueue.main.async {
             self.lastSampleDate = Date()
             self.track = parsedTrack
+            if parsedTrack.isPlaying {
+                self.startElapsedTickerIfNeeded()
+            } else {
+                self.stopElapsedTicker()
+            }
             if !unchanged {
                 self.artwork = newArtwork
                 if let newAccent {

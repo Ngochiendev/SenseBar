@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class MenuBarController: NSObject {
+final class MenuBarController: NSObject, NSPopoverDelegate {
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
     private let onOpenWelcome: () -> Void
@@ -20,17 +20,7 @@ final class MenuBarController: NSObject {
         popover.behavior = .transient
         popover.animates = true
         popover.hasFullSizeContent = PanelSurface.popoverHostsFullSizeContent
-
-        let panelView = MenuPanelView(
-            onQuit: {
-                NSApplication.shared.terminate(nil)
-            }
-        )
-        let host = NSHostingController(rootView: panelView)
-        if #available(macOS 13.0, *) {
-            host.sizingOptions = .preferredContentSize
-        }
-        popover.contentViewController = host
+        popover.delegate = self
     }
 
     private func setupStatusItem() {
@@ -68,6 +58,18 @@ final class MenuBarController: NSObject {
 
     func showPopover() {
         guard let button = statusItem?.button else { return }
+        if popover.contentViewController == nil {
+            let panelView = MenuPanelView(
+                onQuit: {
+                    NSApplication.shared.terminate(nil)
+                }
+            )
+            let host = NSHostingController(rootView: panelView)
+            if #available(macOS 13.0, *) {
+                host.sizingOptions = .preferredContentSize
+            }
+            popover.contentViewController = host
+        }
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
@@ -76,6 +78,14 @@ final class MenuBarController: NSObject {
     func closePopover() {
         if popover.isShown {
             popover.performClose(nil)
+        }
+    }
+
+    // MARK: - NSPopoverDelegate
+
+    nonisolated func popoverDidClose(_ notification: Notification) {
+        Task { @MainActor in
+            self.popover.contentViewController = nil
         }
     }
 

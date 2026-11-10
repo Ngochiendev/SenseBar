@@ -46,8 +46,12 @@ final class AudioStudioService: ObservableObject {
     private init() {
         refreshAudioDevices()
         refreshSystemVolume()
-        refreshRunningAudioApps()
+    }
 
+    /// Bắt đầu lắng nghe sự kiện khởi chạy / đóng ứng dụng để đồng bộ danh sách bộ trộn khi người dùng mở tab Loa.
+    func startMonitoringApps() {
+        refreshRunningAudioApps()
+        guard workspaceObservers.isEmpty else { return }
         let nc = NSWorkspace.shared.notificationCenter
         let launchObs = nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -62,10 +66,20 @@ final class AudioStudioService: ObservableObject {
         workspaceObservers = [launchObs, termObs]
     }
 
+    /// Hủy bỏ lắng nghe sự kiện ứng dụng khi người dùng đóng menu hoặc chuyển tab, giải phóng hoàn toàn CPU.
+    func stopMonitoringApps() {
+        for obs in workspaceObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(obs)
+        }
+        workspaceObservers.removeAll()
+    }
+
     func refreshAll() {
         refreshAudioDevices()
         refreshSystemVolume()
-        refreshRunningAudioApps()
+        if !workspaceObservers.isEmpty {
+            refreshRunningAudioApps()
+        }
     }
 
     // MARK: - Master Volume & CoreAudio Device Name

@@ -36,8 +36,8 @@ struct IslandPreviewCard: View {
                     .background(Capsule().fill(Color.primary.opacity(0.06)))
             }
 
-            // Hình ảnh Example mô phỏng trực tiếp thanh Menu Bar & Tai thỏ MacBook (có hiệu ứng trỏ chuột mở rộng)
-            TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { timeline in
+            // Hình ảnh Example mô phỏng trực tiếp thanh Menu Bar & Tai thỏ MacBook (tối ưu 15fps khi mở popover)
+            TimelineView(.animation(minimumInterval: 1.0 / 15.0)) { timeline in
                 let cycle = timeline.date.timeIntervalSinceReferenceDate
                     .truncatingRemainder(dividingBy: 4.2) / 4.2
                 let exp = previewExpansionProgress(for: cycle)

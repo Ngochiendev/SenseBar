@@ -73,6 +73,12 @@ struct AudioMixerSection: View {
             }
             .panelCard()
         }
+        .onAppear {
+            audio.startMonitoringApps()
+        }
+        .onDisappear {
+            audio.stopMonitoringApps()
+        }
     }
 
     private var audioMixerExampleCard: some View {

@@ -144,13 +144,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    // MARK: - Quản lý Dock Icon khi đóng cửa sổ
+    // MARK: - Quản lý Cửa sổ & Giải phóng Bộ nhớ khi đóng
 
     func windowWillClose(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let welcomeVisible = self.welcomeWindow?.isVisible == true
             if !welcomeVisible {
+                self.welcomeWindow?.contentViewController = nil
+                self.welcomeWindow = nil
                 NSApp.setActivationPolicy(.accessory)
             }
         }

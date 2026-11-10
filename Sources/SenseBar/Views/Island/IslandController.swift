@@ -408,12 +408,12 @@ final class IslandController: ObservableObject {
             return
         }
         guard fullscreenTimer == nil else { return }
-        let timer = Timer(timeInterval: 0.6, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 2.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.syncFullscreenState()
             }
         }
-        timer.tolerance = 0.2
+        timer.tolerance = 0.5
         fullscreenTimer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
@@ -630,12 +630,34 @@ final class IslandController: ObservableObject {
     private func handleMouseEvent(type: NSEvent.EventType) {
         guard SensePillar.dynamicIsland.isEnabled(), let mainPanel, mainPanel.isVisible else { return }
         let mouse = NSEvent.mouseLocation
+        let currentScreen = mainPanel.screen ?? targetScreenForActivePanel
+
+        // Tối ưu Fast Path: Island nằm sát cạnh trên màn hình. Nếu chuột ở phía dưới xa (> 65pt) và đang thu gọn,
+        // bỏ qua toàn bộ phép tính hình học phức tạp để tiết kiệm triệt để CPU khi người dùng rê chuột làm việc.
+        let nearTopThreshold: CGFloat = isExpanded ? 200 : 65
+        let isNearTop = mouse.y >= (currentScreen.frame.maxY - nearTopThreshold)
+
+        if !isNearTop && !isExpanded {
+            if !mainPanel.ignoresMouseEvents {
+                mainPanel.ignoresMouseEvents = true
+            }
+            // Chỉ tra cứu màn hình nếu con trỏ chuột đã vượt khỏi biên màn hình hiện tại
+            let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
+            if (mode == "pointer" || mode == "all" || mode == "automatic") && !currentScreen.frame.contains(mouse) {
+                if let mouseScreen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
+                   mouseScreen.displayID != currentScreen.displayID {
+                    syncAllDisplays()
+                }
+            }
+            return
+        }
 
         // Khi con trỏ chuyển màn hình thì island chuyển theo ngay lập tức
         let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
         if (mode == "pointer" || mode == "all" || mode == "automatic") && !isExpanded {
-            if let mouseScreen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
-               mouseScreen.displayID != mainPanel.screen?.displayID {
+            if !currentScreen.frame.contains(mouse),
+               let mouseScreen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
+               mouseScreen.displayID != currentScreen.displayID {
                 syncAllDisplays()
             }
         }
