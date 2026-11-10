@@ -34,7 +34,11 @@ PATCH="${PATCH:-0}"
 PATCH_NUM=$(echo "$PATCH" | sed 's/[^0-9].*//')
 PATCH_NUM="${PATCH_NUM:-0}"
 
-case "$ARG" in
+# Chuẩn hoá đối số: loại bỏ dấu gạch ngang ở đầu nếu người dùng gõ --minor, -minor,...
+CLEAN_ARG="${ARG#--}"
+CLEAN_ARG="${CLEAN_ARG#-}"
+
+case "$CLEAN_ARG" in
   patch)
     NEW_PATCH=$((PATCH_NUM + 1))
     NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"

@@ -1,113 +1,223 @@
-<p align="center">
-  <img src="Resources/Brand/AppIcon-Default.png" width="128" height="128" alt="SenseBar">
-</p>
+<div align="center">
 
-<h1 align="center">SenseBar</h1>
+<img src="Resources/Brand/AppIcon-Default.png" width="112" height="112" alt="SenseBar">
 
-<p align="center">
-  <strong>Dynamic Island cho MacBook và bộ trộn âm lượng từng ứng dụng, gọn nhẹ trên thanh Menu Bar.</strong>
-</p>
+# SenseBar
 
-<p align="center">
-  <img src="https://img.shields.io/badge/macOS-14.0%2B-black?style=flat-square&logo=apple" alt="macOS 14+">
-  <img src="https://img.shields.io/badge/Apple%20Silicon%20%7C%20Intel-Universal-blue?style=flat-square" alt="Universal">
-  <img src="https://img.shields.io/badge/Swift-6-orange?style=flat-square&logo=swift" alt="Swift 6">
-  <img src="https://img.shields.io/badge/License-GPL--3.0-green?style=flat-square" alt="GPL-3.0">
-</p>
+**Your Mac's notch, made useful.**<br>
+**Biến tai thỏ MacBook thành một phần thật sự hữu ích.**
 
-<p align="center">
-  <img src="assets/install-sensebar.gif" width="560" alt="Kéo SenseBar vào Applications để cài đặt">
-</p>
+Dynamic Island · Per-app volume mixer · Device alerts
 
----
+[Tiếng Việt](#tiếng-việt) · [English](#english)
 
-## Giới thiệu
+[![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111111?style=flat-square&logo=apple)](#yêu-cầu)
+[![Universal](https://img.shields.io/badge/Universal-Apple%20Silicon%20%2B%20Intel-247CF0?style=flat-square)](#yêu-cầu)
+[![Swift 6](https://img.shields.io/badge/Swift-6-F05138?style=flat-square&logo=swift&logoColor=white)](Package.swift)
+[![GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-2EA44F?style=flat-square)](LICENSE)
 
-SenseBar gồm hai tính năng, bật hoặc tắt riêng từng cái:
+[**Tải bản mới nhất / Download latest**](https://github.com/Ngochiendev/SenseBar/releases)
 
-- **Tai thỏ & Dynamic Island**: biến tai thỏ MacBook thành khu vực điều khiển nhạc đang phát.
-- **Bộ trộn âm thanh (Audio Studio)**: chỉnh âm lượng loa tổng và âm lượng riêng cho từng ứng dụng, từ 0% đến 200%.
-
-Máy không có tai thỏ (Mac Intel, Mac mini, iMac, màn hình rời) vẫn dùng đầy đủ. SenseBar tự chuyển sang dạng **viên nang nổi** ở giữa thanh Menu Bar.
+</div>
 
 <p align="center">
-  <img src="assets/dynamic-island-notch.gif" width="46%" alt="Dynamic Island ôm tai thỏ">
-  <img src="assets/dynamic-island-capsule.gif" width="46%" alt="Dynamic Island dạng viên nang">
+  <img src="assets/dynamic-island-notch.gif" width="47%" alt="SenseBar on a MacBook notch">
+  <img src="assets/dynamic-island-capsule.gif" width="47%" alt="SenseBar capsule on an external display">
 </p>
 
 ---
 
-## Tính năng
+# Tiếng Việt
 
-### Tai thỏ & Dynamic Island
+SenseBar là tiện ích Menu Bar cho macOS, kết hợp Dynamic Island với bộ trộn âm lượng từng ứng dụng. Trên MacBook, Island ôm sát tai thỏ thật. Trên Mac mini, iMac, Mac Intel và màn hình rời, nó chuyển thành notch ảo hoặc capsule.
 
-- **Đang phát**: hiện ảnh bìa, tên bài hát và nút phát/tạm dừng, chuyển bài, tua. Hoạt động với các trình phát có báo Now Playing cho macOS (Apple Music, Spotify, trình duyệt...).
-- **Sóng nhạc**: thanh sóng chuyển động theo trạng thái phát, lấy màu từ ảnh bìa.
-- **Mở rộng khi rê chuột**: rê chuột vào tai thỏ hoặc viên nang để mở bảng điều khiển, rời chuột thì tự thu gọn.
-- **Hai kiểu hiển thị** cho màn hình không có tai thỏ: ôm sát như tai thỏ ảo, hoặc viên nang nổi. Có thanh trượt chỉnh chiều rộng, chiều cao và khoảng cách mép trên, kèm hình xem trước trực tiếp.
-- **Chọn màn hình hiển thị**: tự động, màn hình tích hợp, màn hình chính, theo con trỏ chuột hoặc tất cả màn hình.
-- **Ẩn khi toàn màn hình**: tự ẩn khi xem video hoặc chơi game toàn màn hình.
-- **Liquid Glass**: dùng kính lỏng gốc trên macOS 26. Trên macOS 14–15 và máy Intel, SenseBar dùng lớp kính mờ nhiều tầng giả lập để nhẹ và vẫn đẹp.
+## Hai phần chính
 
-### Bộ trộn âm thanh (Audio Studio)
+| Dynamic Island | Audio Studio |
+|---|---|
+| Now Playing với ảnh bìa và tiến trình | Chuyển nhanh thiết bị đầu ra |
+| Phát, dừng, chuyển bài và tua | Âm lượng tổng và tắt tiếng |
+| Mở rộng khi rê chuột | Âm lượng riêng từng app 0–200% |
+| Notch, capsule và nhiều màn hình | Nhận diện app đang phát/tạm nghỉ |
+| Companion tương tác | Không cần driver âm thanh ảo |
+| Thông báo sạc, kết nối và pin yếu | CoreAudio process tap chạy cục bộ |
 
-- **Âm lượng loa tổng** và tắt tiếng nhanh, có hiển thị tên thiết bị đầu ra hiện tại.
-- **Âm lượng từng ứng dụng** từ 0% đến 200%, kèm tắt tiếng riêng từng ứng dụng.
-- Không cần cài driver âm thanh ảo hay kext của bên thứ ba.
+### Dynamic Island phù hợp với từng màn hình
 
-### Khác
+SenseBar tự nhận biết tai thỏ vật lý, hỗ trợ màn hình tích hợp, màn hình chính, màn hình theo con trỏ hoặc tất cả màn hình. Bạn có thể chỉnh chiều rộng, chiều cao, khoảng cách mép trên và chọn notch/capsule cho màn hình không có tai thỏ.
 
-- Giao diện tiếng Việt và tiếng Anh.
-- Tùy chọn khởi động cùng macOS.
-- Một bảng điều khiển duy nhất trên Menu Bar chứa toàn bộ cài đặt.
+Nội dung tự ẩn khi ứng dụng khác chạy toàn màn hình. Liquid Glass gốc được dùng trên macOS hỗ trợ; macOS cũ hơn dùng bề mặt tĩnh nhẹ để giảm chi phí GPU.
 
----
+### Âm lượng từng ứng dụng
 
-## Yêu cầu hệ thống
+Audio Studio điều chỉnh gain riêng cho từng tiến trình âm thanh bằng CoreAudio. App đang tạm nghỉ vẫn giữ nguyên nhóm khi bạn thay đổi mức âm lượng. Mức 100% là âm lượng gốc; dải 100–200% dùng để boost và có giới hạn bảo vệ đầu ra.
 
-- **macOS 14.0 (Sonoma)** trở lên.
-- Bản phát hành là **Universal Binary**, chạy native trên Apple Silicon (M1 trở lên) và Mac Intel 64-bit, không qua Rosetta.
+### AirPods và phụ kiện
 
----
+Khi bạn chủ động bật thông báo thiết bị, SenseBar có thể hiển thị kết nối AirPods, tai nghe, bàn phím, chuột, trạng thái sạc MacBook và cảnh báo pin ở 20%/10%.
+
+Dữ liệu pin phụ thuộc vào những gì thiết bị và macOS cung cấp. Một số phụ kiện chỉ báo trạng thái kết nối.
 
 ## Cài đặt
 
-1. Tải file `SenseBar-vX.X.X-macOS-Universal.dmg` tại [GitHub Releases](https://github.com/Ngochiendev/SenseBar/releases).
-2. Mở file `.dmg`, kéo **SenseBar** vào thư mục **Applications**.
-3. Mở SenseBar từ Launchpad hoặc Spotlight.
-4. Cấp quyền **Trợ năng (Accessibility)** khi được hỏi. Quyền này cần để Dynamic Island nhận chuột và nhận biết ứng dụng toàn màn hình. Sau khi bật công tắc trong Cài đặt Hệ thống, SenseBar tự nhận ngay, không cần mở lại ứng dụng.
+1. Tải DMG tại [GitHub Releases](https://github.com/Ngochiendev/SenseBar/releases).
+2. Kéo **SenseBar** vào thư mục **Applications**.
+3. Mở ứng dụng và làm theo onboarding.
+4. Bật SenseBar tại **Cài đặt Hệ thống → Quyền riêng tư & Bảo mật → Trợ năng**.
+5. Quay lại SenseBar; nút tiếp tục sẽ mở khi macOS xác nhận quyền.
 
-> Mọi dữ liệu xử lý hoàn toàn trên máy của bạn, SenseBar không gửi thông tin ra ngoài.
+<p align="center">
+  <img src="assets/install-sensebar.gif" width="560" alt="Kéo SenseBar vào Applications">
+</p>
 
----
+## Yêu cầu
 
-## Build từ mã nguồn
+- macOS 14 Sonoma trở lên.
+- Apple Silicon hoặc Intel 64-bit.
+- Quyền Trợ năng để hoàn tất thiết lập và sử dụng ứng dụng.
+- Artifact phát hành là Universal Binary gồm `arm64` và `x86_64`.
 
-Yêu cầu: macOS 14.0+, Xcode Command Line Tools (Swift 6).
+## Quyền riêng tư
 
-```bash
+| Quyền | Thời điểm | SenseBar dùng để |
+|---|---|---|
+| **Trợ năng** | Onboarding, bắt buộc | Nhận tương tác chuột toàn cục cho Island |
+| **Bluetooth** | Khi bật thông báo thiết bị | Nhận kết nối và pin phụ kiện |
+| **Audio Capture** | Khi mixer cần điều chỉnh app | Áp dụng gain riêng trên máy |
+| **Automation** | Chỉ khi tích hợp trình phát yêu cầu | Gửi lệnh điều khiển phát |
+
+Now Playing, âm thanh và thông tin thiết bị được xử lý trên máy. SenseBar không có tài khoản, quảng cáo hoặc telemetry riêng. Kiểm tra cập nhật tự động chỉ gọi GitHub Releases API qua HTTPS và có thể tắt trong Cài đặt.
+
+## Build nhanh
+
+Cần Xcode Command Line Tools với Swift 6.
+
+```zsh
 git clone https://github.com/Ngochiendev/SenseBar.git
 cd SenseBar
 
-# Bản debug nhanh (kiến trúc của máy), mở thử ngay
-./build-app.sh --debug && open build/SenseBar.app
-
-# Bản release Universal (arm64 + x86_64)
-./build-app.sh
-
-# Đóng gói file .dmg
-./build-app.sh --dmg
+./build-app.sh --debug
+killall SenseBar 2>/dev/null || true
+open build/SenseBar.app
 ```
 
-Kiểm tra nhanh các thành phần cốt lõi:
+`./build-app.sh` tạo Universal release; `./build-app.sh --dmg` tạo DMG. Chạy kiểm tra tích hợp bằng:
 
-```bash
-build/SenseBar.app/Contents/MacOS/SenseBar --selftest
+```zsh
+./build/SenseBar.app/Contents/MacOS/SenseBar --selftest
 ```
+
+Chi tiết kiến trúc, coding convention và quy trình pull request nằm trong [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Khắc phục quyền khi test
+
+```zsh
+killall SenseBar 2>/dev/null || true
+tccutil reset All com.sensebar.SenseBar
+defaults delete com.sensebar.SenseBar 2>/dev/null || true
+```
+
+Lệnh `defaults delete` xóa toàn bộ cài đặt SenseBar cục bộ.
+
 ---
 
-## Giấy phép
+# English
 
-SenseBar được phát hành theo giấy phép **GNU General Public License v3.0**. Xem chi tiết tại [LICENSE](LICENSE).
+SenseBar is a macOS menu bar utility that combines a Dynamic Island with a per-app volume mixer. It wraps around the physical notch on MacBook. On Mac mini, iMac, Intel Mac, and external displays, it becomes a virtual notch or floating capsule.
 
-Tác giả: **Ngochiendev**
+## Two focused experiences
+
+| Dynamic Island | Audio Studio |
+|---|---|
+| Now Playing with artwork and progress | Fast output-device switching |
+| Play, pause, skip, and seek | Master volume and mute |
+| Hover to expand | Independent app volume from 0–200% |
+| Notch, capsule, and multi-display modes | Active and paused app grouping |
+| Interactive Companion | No virtual audio driver |
+| Charging, connection, and battery alerts | Local CoreAudio process taps |
+
+### Built for every display
+
+SenseBar detects physical notches and can target the built-in display, primary display, display under the pointer, or every display. Virtual notch and capsule dimensions can be tuned for non-notched screens.
+
+Content hides while another app is full screen. Supported macOS versions use native Liquid Glass; older versions use lightweight static surfaces to reduce GPU work.
+
+### Per-app volume
+
+Audio Studio applies independent gain to audio processes through CoreAudio. Paused apps remain in their group when their saved volume changes. 100% preserves the original level; the 100–200% range provides bounded boost.
+
+### AirPods and accessories
+
+After you explicitly enable device notices, SenseBar can show AirPods, headphones, keyboards, mice, MacBook power events, and low-battery warnings at 20% and 10%.
+
+Battery detail depends on information exposed by the accessory and macOS. Some devices expose connection state without battery values.
+
+## Install
+
+1. Download the DMG from [GitHub Releases](https://github.com/Ngochiendev/SenseBar/releases).
+2. Drag **SenseBar** into **Applications**.
+3. Open the app and follow onboarding.
+4. Enable SenseBar in **System Settings → Privacy & Security → Accessibility**.
+5. Return to SenseBar; Continue unlocks after macOS confirms access.
+
+## Requirements
+
+- macOS 14 Sonoma or later.
+- Apple Silicon or 64-bit Intel.
+- Accessibility access to finish setup and use the app.
+- Release artifacts are Universal Binaries with `arm64` and `x86_64`.
+
+## Privacy
+
+| Permission | When | Purpose |
+|---|---|---|
+| **Accessibility** | Required during onboarding | Global pointer interaction for Island |
+| **Bluetooth** | Device notices are enabled | Accessory connections and battery values |
+| **Audio Capture** | The mixer adjusts an app | Apply per-app gain locally |
+| **Automation** | A player integration requires it | Send playback commands |
+
+Now Playing, audio, and device information are processed locally. SenseBar has no accounts, ads, or first-party telemetry. Automatic update checks only contact the GitHub Releases API over HTTPS and can be disabled in Settings.
+
+## Quick build
+
+Requires Xcode Command Line Tools with Swift 6.
+
+```zsh
+git clone https://github.com/Ngochiendev/SenseBar.git
+cd SenseBar
+
+./build-app.sh --debug
+killall SenseBar 2>/dev/null || true
+open build/SenseBar.app
+```
+
+`./build-app.sh` creates a Universal release and `./build-app.sh --dmg` creates a DMG. Run the integrated validation with:
+
+```zsh
+./build/SenseBar.app/Contents/MacOS/SenseBar --selftest
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture, coding conventions, and the pull request workflow.
+
+## Reset a test installation
+
+```zsh
+killall SenseBar 2>/dev/null || true
+tccutil reset All com.sensebar.SenseBar
+defaults delete com.sensebar.SenseBar 2>/dev/null || true
+```
+
+The `defaults delete` command removes all local SenseBar preferences.
+
+---
+
+<div align="center">
+
+[Releases](https://github.com/Ngochiendev/SenseBar/releases) ·
+[Contributing](CONTRIBUTING.md) ·
+[Security](SECURITY.md) ·
+[GPL-3.0](LICENSE)
+
+Made for macOS by [Ngochiendev](https://github.com/Ngochiendev)
+
+</div>
