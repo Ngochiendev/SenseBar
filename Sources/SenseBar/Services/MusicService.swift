@@ -2,6 +2,13 @@ import AppKit
 import Combine
 import SwiftUI
 
+struct MediaSourceItem: Equatable, Identifiable {
+    var id: String { bundleID }
+    let bundleID: String
+    let appName: String
+    let isPlaying: Bool
+}
+
 struct NowPlayingTrack: Equatable {
     var title: String
     var artist: String
@@ -12,6 +19,12 @@ struct NowPlayingTrack: Equatable {
     var appName: String
     var bundleID: String
     var pid: Int
+    var supportsTransportControls = false
+    var supportsNext = false
+    var supportsPrevious = false
+    var supportsSeeking = false
+    var playbackRevision: String?
+    var controlPID: Int?
 
     var progress: Double {
         guard duration > 0 else { return 0 }
@@ -38,17 +51,34 @@ final class MusicService: ObservableObject {
     @Published private(set) var track: NowPlayingTrack?
     @Published private(set) var artwork: NSImage?
     @Published private(set) var accentColor: Color = Color(red: 0.98, green: 0.58, blue: 0.12)
+    @Published private(set) var availableSources: [MediaSourceItem] = []
+    @Published private(set) var preferredSource: String = "auto"
+    var sourceDisplayName: String {
+        if let track { return track.appName }
+        guard preferredSource != "auto" else { return L10n.shared.string(vi: "Nhạc", en: "Now Playing") }
+        if let source = availableSources.first(where: { $0.bundleID == preferredSource }) { return source.appName }
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: preferredSource) {
+            return url.deletingPathExtension().lastPathComponent
+        }
+        return preferredSource
+    }
+    var hasMediaPresentation: Bool { track?.isPlaying == true }
 
     private var process: Process?
     private var inputPipe: Pipe?
     private var outputPipe: Pipe?
     private var tickTimer: Timer?
     private var lastSampleDate = Date()
-    private nonisolated(unsafe) var rawBuffer = Data()
+    private var shouldRun = false
+    private var cachedRemoteArtwork: NSImage?
+    private var cachedRemoteAccent: Color?
+    private var rawBuffer = Data()
+    private var bridgeGeneration = UUID()
     private let workerQueue = DispatchQueue(label: "com.ngochiendev.sensebar.music-service", qos: .utility)
 
-    private init() {
-        start()
+    private init(autostart: Bool = true) {
+        preferredSource = UserDefaults.standard.string(forKey: "SenseBarMediaPreferredSource") ?? "auto"
+        if autostart { start() }
     }
 
     private static var dylibPath: String? {
@@ -56,6 +86,10 @@ final class MusicService: ObservableObject {
            FileManager.default.fileExists(atPath: dylibURL.path) {
             _ = removexattr(dylibURL.path, "com.apple.quarantine", 0)
             return dylibURL.path
+        }
+        if let executable = Bundle.main.executableURL {
+            let adjacent = executable.deletingLastPathComponent().appendingPathComponent("libSenseBarNowPlaying.dylib")
+            if FileManager.default.fileExists(atPath: adjacent.path) { return adjacent.path }
         }
         let candidates = [
             Bundle.main.bundleURL.deletingLastPathComponent(),
@@ -80,10 +114,14 @@ final class MusicService: ObservableObject {
     """
 
     func start() {
+        shouldRun = true
         guard process == nil, let dylib = Self.dylibPath else { return }
         let proc = Process()
         let outPipe = Pipe()
         let inPipe = Pipe()
+        let generation = UUID()
+        bridgeGeneration = generation
+        rawBuffer.removeAll(keepingCapacity: true)
 
         _ = fcntl(inPipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
@@ -99,15 +137,17 @@ final class MusicService: ObservableObject {
                 return
             }
             Task { @MainActor [weak self] in
-                self?.appendOutput(data)
+                guard let self, self.bridgeGeneration == generation else { return }
+                self.appendOutput(data)
             }
         }
 
-        proc.terminationHandler = { [weak self] _ in
+        proc.terminationHandler = { [weak self] ended in
             Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
-                self?.process = nil
-                self?.start()
+                guard let self, self.shouldRun, self.process === ended else { return }
+                self.process = nil
+                self.start()
             }
         }
 
@@ -116,85 +156,176 @@ final class MusicService: ObservableObject {
             self.process = proc
             self.outputPipe = outPipe
             self.inputPipe = inPipe
+            self.sendPreferredSourceCommand(self.preferredSource)
         } catch {
             outPipe.fileHandleForReading.readabilityHandler = nil
         }
     }
 
     func stop() {
+        bridgeGeneration = UUID()
+        rawBuffer.removeAll(keepingCapacity: false)
+        stopElapsedTicker()
+        shouldRun = false
+        process?.terminationHandler = nil
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         process?.terminate()
         process = nil
         inputPipe = nil
         outputPipe = nil
+        cachedRemoteArtwork = nil
+        cachedRemoteAccent = nil
+        track = nil
+        artwork = nil
+        availableSources = []
     }
 
     // MARK: - Playback Controls
 
+    static func cleanMediaTitle(_ title: String) -> String {
+        var cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let regex = try? NSRegularExpression(pattern: #"^\(\d+\+?\)\s*"#) {
+            let range = NSRange(cleaned.startIndex..., in: cleaned)
+            cleaned = regex.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: "")
+        }
+        for suffix in [" - YouTube", " – YouTube"] {
+            if cleaned.hasSuffix(suffix) { cleaned.removeLast(suffix.count) }
+        }
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func validatePlaybackParser() -> Bool {
+        let service = MusicService(autostart: false)
+        defer { service.stop() }
+        func apply(title: String, artist: String, playing: Bool) {
+            let fields: [String: Any] = ["title": title, "artist": artist, "duration": 180,
+                "pid": 100, "bundleID": "com.spotify.client", "appName": "Spotify",
+                "isPlaying": playing, "supportsTransportControls": true]
+            if let data = try? JSONSerialization.data(withJSONObject: fields) { service.parseJSONLine(data) }
+        }
+        apply(title: "Song A", artist: "Artist A", playing: true)
+        guard service.track?.title == "Song A", service.track?.artist == "Artist A", service.hasMediaPresentation else { return false }
+        apply(title: "Song A", artist: "Artist A", playing: false)
+        guard service.track?.isPlaying == false, !service.hasMediaPresentation,
+              service.track?.supportsTransportControls == false else { return false }
+        let revision = UUID().uuidString
+        let valid: [String: Any] = ["title": "Song A", "bundleID": "com.spotify.client", "pid": 100,
+            "isPlaying": true, "supportsTransportControls": true, "controlPID": 100, "playbackRevision": revision]
+        guard let data = try? JSONSerialization.data(withJSONObject: valid) else { return false }
+        // Exercise real pipe framing, including a split line and multiple records per chunk.
+        let split = data.count / 2
+        service.appendOutput(data.prefix(split))
+        guard service.track?.isPlaying == false else { return false }
+        service.appendOutput(data.suffix(from: split) + Data("\n{}\n".utf8))
+        guard service.track == nil else { return false }
+        service.parseJSONLine(data)
+        guard service.track?.supportsTransportControls == true else { return false }
+        service.parseJSONLine(Data("{\"commandAccepted\":false}".utf8))
+        guard service.track?.title == "Song A", service.track?.isPlaying == true else { return false }
+        service.preferredSource = "com.google.Chrome"
+        service.track = nil
+        var stale = valid
+        stale["preferredSource"] = "auto"
+        guard let staleData = try? JSONSerialization.data(withJSONObject: stale) else { return false }
+        service.parseJSONLine(staleData)
+        guard service.track == nil else { return false }
+        let pausedChrome: [String: Any] = ["title": "YouTube video", "bundleID": "com.google.Chrome", "pid": 200,
+            "isPlaying": false, "preferredSource": "com.google.Chrome", "supportsTransportControls": true,
+            "controlPID": 200, "playbackRevision": UUID().uuidString,
+            "runningOutputBrowsers": [["bundleID": "com.google.Chrome", "appName": "Google Chrome", "pid": 200]]]
+        guard let pausedData = try? JSONSerialization.data(withJSONObject: pausedChrome) else { return false }
+        service.parseJSONLine(pausedData)
+        guard service.track?.title == "YouTube video", service.track?.isPlaying == false,
+              service.track?.supportsTransportControls == true else { return false }
+        service.stop()
+        return service.track == nil && service.artwork == nil
+    }
+
+    func refreshNowPlaying() {
+        guard let handle = inputPipe?.fileHandleForWriting else { return }
+        workerQueue.async { try? handle.write(contentsOf: Data("refresh\n".utf8)) }
+    }
+
+    /// Chọn nguồn phát cụ thể (hoặc "auto" để tự động nhận diện)
+    func selectSource(_ bundleID: String) {
+        guard preferredSource != bundleID else { return }
+        preferredSource = bundleID
+        track = nil
+        artwork = nil
+        cachedRemoteArtwork = nil
+        cachedRemoteAccent = nil
+        stopElapsedTicker()
+        UserDefaults.standard.set(bundleID, forKey: "SenseBarMediaPreferredSource")
+        sendPreferredSourceCommand(bundleID)
+        refreshNowPlaying()
+    }
+
+    private func sendPreferredSourceCommand(_ bundleID: String) {
+        guard let pipe = inputPipe else { return }
+        let dict: [String: Any] = ["command": "set_preferred_source", "bundleID": bundleID]
+        guard let json = try? JSONSerialization.data(withJSONObject: dict),
+              let line = String(data: json, encoding: .utf8) else { return }
+        workerQueue.async {
+            try? pipe.fileHandleForWriting.write(contentsOf: Data((line + "\n").utf8))
+        }
+    }
+
     /// Chuyển đổi trạng thái Phát / Tạm dừng (Play / Pause) của bài hát đang phát.
     func togglePlayPause() {
-        if var current = track {
-            current.isPlaying.toggle()
-            track = current
-            lastSampleDate = Date()
-            if !current.isPlaying {
-                NotificationCenter.default.post(name: NSNotification.Name("SenseBarMusicDidPause"), object: nil)
-            }
-        }
-        sendCommand("toggle")
+        guard track?.supportsTransportControls == true else { return }
+        sendCommand(track?.isPlaying == true ? "pause" : "play")
     }
 
     /// Chuyển sang bài hát tiếp theo.
     func nextTrack() {
+        guard track?.supportsNext == true else { return }
         sendCommand("next")
     }
 
     /// Quay lại bài hát trước đó.
     func previousTrack() {
+        guard track?.supportsPrevious == true else { return }
         sendCommand("previous")
     }
 
     /// Tua nhanh hoặc tua lùi bài hát đến thời điểm cụ thể.
     /// - Parameter seconds: Vị trí giây trong bài hát cần phát tới.
     func seek(to seconds: TimeInterval) {
-        if var current = track {
-            current.elapsed = max(0, min(current.duration, seconds))
-            track = current
-            lastSampleDate = Date()
-        }
-        sendCommand(String(format: "seek:%.2f", max(0, seconds)))
+        guard let track, track.supportsSeeking, track.duration > 0, seconds.isFinite else { return }
+        sendCommand("seek", position: max(0, min(track.duration, seconds)))
     }
 
     /// Kích hoạt và mở ứng dụng đang phát nhạc lên màn hình (Spotify, Apple Music, Chrome,...).
     func openPlayerApp() {
-        guard let track else { return }
-        if !track.bundleID.isEmpty,
-           let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: track.bundleID) {
-            NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration())
-        } else if track.pid > 0,
-                  let running = NSRunningApplication(processIdentifier: pid_t(track.pid)) {
-            running.activate()
+        let bundleID = track?.bundleID ?? (preferredSource == "auto" ? "" : preferredSource)
+        guard !bundleID.isEmpty else { return }
+        if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
+            app.activate()
+        } else if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
         }
     }
 
-    private func sendCommand(_ command: String) {
-        guard let handle = inputPipe?.fileHandleForWriting,
-              let data = (command + "\n").data(using: .utf8) else { return }
+    private func sendCommand(_ command: String, position: Double? = nil) {
+        guard let pipe = inputPipe, let track, track.supportsTransportControls,
+              let revision = track.playbackRevision, let controlPID = track.controlPID else { return }
+        var dict: [String: Any] = ["command": command, "playbackRevision": revision, "controlPID": controlPID]
+        if let position { dict["position"] = position }
+        guard let json = try? JSONSerialization.data(withJSONObject: dict),
+              let line = String(data: json, encoding: .utf8) else { return }
         workerQueue.async {
-            try? handle.write(contentsOf: data)
+            try? pipe.fileHandleForWriting.write(contentsOf: Data((line + "\n").utf8))
         }
     }
 
-    // MARK: - Output Parsing & Elapsed Ticker
+    // MARK: - Internal Engine
 
     private func startElapsedTickerIfNeeded() {
         guard tickTimer == nil else { return }
-        lastSampleDate = Date()
-        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard var current = self.track, current.isPlaying else {
-                    self.stopElapsedTicker()
+                guard let self, var current = self.track, current.isPlaying else {
+                    self?.stopElapsedTicker()
                     return
                 }
                 let now = Date()
@@ -219,33 +350,31 @@ final class MusicService: ObservableObject {
     }
 
     private func appendOutput(_ data: Data) {
-        workerQueue.async { [weak self] in
-            guard let self else { return }
-            self.rawBuffer.append(data)
-            while let newline = self.rawBuffer.firstIndex(of: 0x0A) {
-                let lineData = self.rawBuffer.subdata(in: 0..<newline)
-                self.rawBuffer.removeSubrange(0...newline)
-                Task { @MainActor [weak self] in
-                    self?.parseJSONLine(lineData)
-                }
-            }
+        rawBuffer.append(data)
+        while let newline = rawBuffer.firstIndex(of: 0x0A) {
+            let line = rawBuffer.subdata(in: rawBuffer.startIndex..<newline)
+            rawBuffer.removeSubrange(rawBuffer.startIndex...newline)
+            parseJSONLine(line)
         }
     }
 
     private func parseJSONLine(_ data: Data) {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        if json["error"] != nil { return }
+        if json["error"] != nil || json["commandAccepted"] != nil { return }
+        if let selection = json["preferredSource"] as? String, selection != preferredSource { return }
 
-        var rawTitle = (json["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        // Xoá badge thông báo ở đầu tiêu đề do trình duyệt thêm vào ví dụ: "(1) ", "(12) "
-        if let regex = try? NSRegularExpression(pattern: #"^\(\d+\+?\)\s*"#) {
-            let range = NSRange(rawTitle.startIndex..., in: rawTitle)
-            rawTitle = regex.stringByReplacingMatches(in: rawTitle, options: [], range: range, withTemplate: "")
+        if let sourcesList = json["availableSources"] as? [[String: Any]] {
+            let parsedSources = sourcesList.compactMap { item -> MediaSourceItem? in
+                guard let bundle = item["bundleID"] as? String,
+                      let name = item["appName"] as? String else { return nil }
+                return MediaSourceItem(bundleID: bundle, appName: name, isPlaying: item["isPlaying"] as? Bool == true)
+            }
+            if parsedSources != self.availableSources {
+                self.availableSources = parsedSources
+            }
         }
-        if let range = rawTitle.range(of: " - YouTube") {
-            rawTitle = String(rawTitle[..<range.lowerBound])
-        }
-        rawTitle = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let rawTitle = Self.cleanMediaTitle(json["title"] as? String ?? "")
         let artist = (json["artist"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let album = (json["album"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let duration = (json["duration"] as? Double) ?? 0
@@ -262,15 +391,6 @@ final class MusicService: ObservableObject {
 
         let isBrowserHomepage = isBrowser && (rawTitle.lowercased() == "youtube" || rawTitle.lowercased() == "new tab" || rawTitle.lowercased() == "tab mới") && (!isPlaying || duration <= 0)
 
-        guard !rawTitle.isEmpty, !isBrowserHomepage else {
-            DispatchQueue.main.async {
-                self.track = nil
-                self.artwork = nil
-                self.stopElapsedTicker()
-            }
-            return
-        }
-
         var newArtwork: NSImage?
         var newAccent: Color?
         let unchanged = (json["artworkUnchanged"] as? Bool) == true
@@ -281,35 +401,58 @@ final class MusicService: ObservableObject {
             newArtwork = image
             newAccent = Self.extractAccentColor(from: image)
         }
+        if !unchanged {
+            cachedRemoteArtwork = newArtwork
+            cachedRemoteAccent = newAccent
+        }
 
+        let browsers = (json["runningOutputBrowsers"] as? [[String: Any]] ?? []).compactMap { item -> BrowserPlaybackActivity? in
+            guard let bundle = item["bundleID"] as? String, let name = item["appName"] as? String,
+                  let pid = item["pid"] as? Int else { return nil }
+            return BrowserPlaybackActivity(bundleID: bundle, appName: name, pid: pid)
+        }
+        guard let resolution = MediaPlaybackPolicy.resolve(title: isBrowserHomepage ? "" : rawTitle,
+            bundleID: bundleID, appName: appName, pid: pid, isPlaying: isPlaying, browsers: browsers, preferredSource: preferredSource) else {
+            self.track = nil
+            self.artwork = nil
+            self.stopElapsedTicker()
+            return
+        }
+
+        let revision = (json["playbackRevision"] as? String).flatMap(UUID.init(uuidString:))
+        let controlPID = json["controlPID"] as? Int
+        let canControl = resolution.usesRemoteMetadata && json["supportsTransportControls"] as? Bool == true
+            && revision != nil && (controlPID ?? 0) > 0
         let parsedTrack = NowPlayingTrack(
-            title: rawTitle,
-            artist: artist,
-            album: album,
-            duration: max(0, duration),
-            elapsed: max(0, elapsed),
-            isPlaying: isPlaying,
-            appName: appName,
-            bundleID: bundleID,
-            pid: pid
+            title: resolution.title,
+            artist: resolution.usesRemoteMetadata ? artist : "",
+            album: resolution.usesRemoteMetadata ? album : "",
+            duration: resolution.usesRemoteMetadata ? max(0, duration) : 0,
+            elapsed: resolution.usesRemoteMetadata ? max(0, elapsed) : 0,
+            isPlaying: resolution.isPlaying,
+            appName: resolution.appName,
+            bundleID: resolution.bundleID,
+            pid: resolution.pid,
+            supportsTransportControls: canControl,
+            supportsNext: canControl && json["supportsNext"] as? Bool == true,
+            supportsPrevious: canControl && json["supportsPrevious"] as? Bool == true,
+            supportsSeeking: canControl && json["supportsSeeking"] as? Bool == true,
+            playbackRevision: revision?.uuidString,
+            controlPID: controlPID
         )
-
-        DispatchQueue.main.async {
-            self.lastSampleDate = Date()
-            self.track = parsedTrack
-            if parsedTrack.isPlaying {
-                self.startElapsedTickerIfNeeded()
-            } else {
-                self.stopElapsedTicker()
-            }
-            if !unchanged {
-                self.artwork = newArtwork
-                if let newAccent {
-                    self.accentColor = newAccent
-                } else {
-                    self.accentColor = Color(red: 0.38, green: 0.64, blue: 1.0)
-                }
-            }
+        self.lastSampleDate = Date()
+        self.track = parsedTrack
+        if parsedTrack.isPlaying && parsedTrack.duration > 0 {
+            self.startElapsedTickerIfNeeded()
+        } else {
+            self.stopElapsedTicker()
+        }
+        if !resolution.usesRemoteMetadata {
+            self.artwork = NSRunningApplication(processIdentifier: pid_t(resolution.pid))?.icon
+            self.accentColor = Color(red: 0.38, green: 0.64, blue: 1.0)
+        } else {
+            self.artwork = cachedRemoteArtwork
+            self.accentColor = cachedRemoteAccent ?? Color(red: 0.38, green: 0.64, blue: 1.0)
         }
     }
 

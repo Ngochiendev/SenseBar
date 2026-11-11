@@ -1159,6 +1159,12 @@ enum PetMotion {
 
 /// Bộ điều phối hỗ trợ quản lý cấu hình, định thời gian và tính toán kích cỡ SenseBar cho thú cưng.
 enum PetEngine {
+    /// Media đang phát luôn giữ pet tỉnh; chỉ ngủ sau đủ năm phút kể từ lần tương tác/mở máy.
+    static func idleMood(systemIdle: TimeInterval, sinceReset: TimeInterval, isMediaPlaying: Bool) -> PetMood {
+        guard !isMediaPlaying, systemIdle.isFinite, sinceReset.isFinite else { return .idle }
+        return min(systemIdle, max(0, sinceReset)) >= 300 ? .sleeping : .idle
+    }
+
     /// Danh sách các tâm trạng chào đón thân thiện.
     static let greetings: [PetMood] = [.happy, .wink, .love]
 

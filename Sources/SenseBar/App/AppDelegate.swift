@@ -149,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard PermissionManager.shared.accessibilityGranted else { return }
         IslandController.shared.start()
         IslandController.shared.syncVisibility()
+        MusicService.shared.refreshNowPlaying()
         AudioStudioService.shared.refreshAll()
         welcomeWindow?.close()
     }

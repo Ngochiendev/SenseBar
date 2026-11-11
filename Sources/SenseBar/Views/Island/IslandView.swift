@@ -658,6 +658,8 @@ struct IslandView: View {
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
+                    .disabled(!track.supportsTransportControls)
+                    .opacity(track.supportsTransportControls ? 1 : 0.35)
 
                     Button {
                         music.togglePlayPause()
@@ -669,6 +671,8 @@ struct IslandView: View {
                             .background(Circle().fill(Color.white))
                     }
                     .buttonStyle(.plain)
+                    .disabled(!track.supportsTransportControls)
+                    .opacity(track.supportsTransportControls ? 1 : 0.35)
 
                     Button {
                         music.nextTrack()
@@ -679,6 +683,8 @@ struct IslandView: View {
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
+                    .disabled(!track.supportsTransportControls)
+                    .opacity(track.supportsTransportControls ? 1 : 0.35)
 
                     Spacer()
 

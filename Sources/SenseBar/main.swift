@@ -45,6 +45,36 @@ MainActor.assumeIsolated {
         precondition(routes.consume(available: [], selected: nil).isEmpty)
         precondition(routes.consume(available: ["airpods"], selected: "airpods") == ["airpods"],
                      "Reconnect must re-arm after the output disappears")
+        let chrome = BrowserPlaybackActivity(bundleID: "com.google.Chrome", appName: "Google Chrome", pid: 123)
+        let autoplay = MediaPlaybackPolicy.resolve(title: "", bundleID: "", appName: "", pid: 0,
+            isPlaying: false, browsers: [chrome])
+        precondition(autoplay?.isPlaying == true && autoplay?.title == "Google Chrome"
+                     && autoplay?.usesRemoteMetadata == false,
+                     "Autoplay with no Media Session must still show browser output")
+        let reels = MediaPlaybackPolicy.resolve(title: "Facebook", bundleID: chrome.bundleID,
+            appName: chrome.appName, pid: chrome.pid, isPlaying: false, browsers: [chrome])
+        precondition(reels?.isPlaying == true && reels?.usesRemoteMetadata == false,
+                     "Observed Facebook fixture: false MediaRemote state must not hide live Chrome output")
+        let youtube = MediaPlaybackPolicy.resolve(title: "Video A", bundleID: chrome.bundleID,
+            appName: chrome.appName, pid: chrome.pid, isPlaying: true, browsers: [chrome])
+        precondition(youtube?.title == "Video A" && youtube?.usesRemoteMetadata == true,
+                     "YouTube must preserve valid metadata and transport controls")
+        let paused = MediaPlaybackPolicy.resolve(title: "Video A", bundleID: chrome.bundleID,
+            appName: chrome.appName, pid: chrome.pid, isPlaying: false, browsers: [])
+        precondition(paused?.isPlaying == false, "Paused media with no browser output must stay paused")
+        precondition(MediaPlaybackPolicy.resolve(title: "", bundleID: "", appName: "", pid: 0,
+            isPlaying: false, browsers: []) == nil, "Closed players must not leave a phantom track")
+        let spotify = MediaPlaybackPolicy.resolve(title: "Song B", bundleID: "com.spotify.client",
+            appName: "Spotify", pid: 456, isPlaying: true, browsers: [chrome])
+        precondition(spotify?.title == "Song B" && spotify?.bundleID == "com.spotify.client",
+                     "Browser fallback must not replace a valid playing music app")
+        precondition(PetEngine.idleMood(systemIdle: 900, sinceReset: 900, isMediaPlaying: true) == .idle,
+                     "Watching a long video must never trigger the idle timer's sleeping pet")
+        precondition(PetEngine.idleMood(systemIdle: 900, sinceReset: 0, isMediaPlaying: false) == .idle,
+                     "Pausing media must start a fresh idle period, not sleep immediately")
+        precondition(PetEngine.idleMood(systemIdle: 300, sinceReset: 300, isMediaPlaying: false) == .sleeping)
+        precondition(PetEngine.idleMood(systemIdle: 1, sinceReset: 900, isMediaPlaying: false) == .idle,
+                     "Mouse or keyboard activity must wake the idle policy")
         print("SELFTEST OK")
         exit(0)
     }

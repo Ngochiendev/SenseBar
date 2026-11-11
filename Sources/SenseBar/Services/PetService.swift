@@ -20,7 +20,9 @@ final class PetService: ObservableObject {
     @Published private(set) var currentVisit: PetVisit?
     @Published private(set) var currentReaction: PetReactionEvent?
     @Published private(set) var currentStatusCue: PetStatusCue?
-    var hasActivePresentation: Bool { currentReaction != nil || currentVisit != nil || mood == .sleeping }
+    var hasActivePresentation: Bool {
+        currentReaction != nil || (!isMediaPlaying && (currentVisit != nil || mood == .sleeping))
+    }
     private var activityTimer: Timer?
     private var sessionActive = true
     private var isMediaPlaying = false
@@ -37,7 +39,7 @@ final class PetService: ObservableObject {
     private var idleMood: PetMood {
         let systemIdle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .null)
         let sinceReset = max(0, ProcessInfo.processInfo.systemUptime - idleResetUptime)
-        return min(systemIdle, sinceReset) >= 300 ? .sleeping : .idle
+        return PetEngine.idleMood(systemIdle: systemIdle, sinceReset: sinceReset, isMediaPlaying: isMediaPlaying)
     }
 
     private func startActivityMonitoring() {
@@ -68,7 +70,12 @@ final class PetService: ObservableObject {
                     self.visitTimer = nil
                     self.currentVisit = nil
                     if self.mood == .sleeping { self.mood = .idle }
+                    if self.currentStatusCue == .sleeping {
+                        self.statusCueTask?.cancel()
+                        self.currentStatusCue = nil
+                    }
                 } else {
+                    self.idleResetUptime = ProcessInfo.processInfo.systemUptime
                     self.scheduleNextVisit()
                 }
             }
