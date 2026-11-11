@@ -3,6 +3,10 @@ import Foundation
 
 MainActor.assumeIsolated {
     if CommandLine.arguments.contains("--selftest") {
+        precondition(MusicService.cleanMediaTitle("TỔNG HỢP NHẠC DRILL - YouTube") == "TỔNG HỢP NHẠC DRILL")
+        precondition(MusicService.cleanMediaTitle("(1) Bài hát mới – YouTube") == "Bài hát mới")
+        precondition(MusicService.cleanMediaTitle("Song - YouTube remix") == "Song - YouTube remix")
+        precondition(MusicService.validatePlaybackParser(), "MusicService parser must cleanly parse playback sessions")
         let menuIcon = BrandIconResources.menuBarTemplateImage()
         assert(menuIcon.isTemplate, "MenuBarIcon must be a template image")
         assert(menuIcon.size == NSSize(width: 26, height: 20), "MenuBarIcon size must be 26x20")
@@ -51,17 +55,28 @@ MainActor.assumeIsolated {
         precondition(autoplay?.isPlaying == true && autoplay?.title == "Google Chrome"
                      && autoplay?.usesRemoteMetadata == false,
                      "Autoplay with no Media Session must still show browser output")
+        let matchingAutoplay = MediaPlaybackPolicy.resolve(title: "", bundleID: chrome.bundleID,
+            appName: chrome.appName, pid: chrome.pid, isPlaying: false, browsers: [chrome])
+        precondition(matchingAutoplay?.isPlaying == true && matchingAutoplay?.usesRemoteMetadata == false,
+                     "Browser output with an empty media session must remain visible")
         let reels = MediaPlaybackPolicy.resolve(title: "Facebook", bundleID: chrome.bundleID,
             appName: chrome.appName, pid: chrome.pid, isPlaying: false, browsers: [chrome])
-        precondition(reels?.isPlaying == true && reels?.usesRemoteMetadata == false,
-                     "Observed Facebook fixture: false MediaRemote state must not hide live Chrome output")
+        precondition(reels?.isPlaying == false && reels?.usesRemoteMetadata == true && reels?.title == "Facebook",
+                     "A lingering Chrome output stream must preserve the paused recording")
         let youtube = MediaPlaybackPolicy.resolve(title: "Video A", bundleID: chrome.bundleID,
             appName: chrome.appName, pid: chrome.pid, isPlaying: true, browsers: [chrome])
-        precondition(youtube?.title == "Video A" && youtube?.usesRemoteMetadata == true,
+        precondition(youtube?.title == "Video A" && youtube?.usesRemoteMetadata == true && youtube?.isPlaying == true,
                      "YouTube must preserve valid metadata and transport controls")
         let paused = MediaPlaybackPolicy.resolve(title: "Video A", bundleID: chrome.bundleID,
             appName: chrome.appName, pid: chrome.pid, isPlaying: false, browsers: [])
         precondition(paused?.isPlaying == false, "Paused media with no browser output must stay paused")
+        let pinnedMissing = MediaPlaybackPolicy.resolve(title: "", bundleID: "", appName: "", pid: 0,
+            isPlaying: false, browsers: [chrome], preferredSource: "com.spotify.client")
+        precondition(pinnedMissing == nil, "An unavailable pinned player must not show another app")
+        let pinnedSpotify = MediaPlaybackPolicy.resolve(title: "Song B", bundleID: "com.spotify.client",
+            appName: "Spotify", pid: 456, isPlaying: false, browsers: [chrome], preferredSource: "com.spotify.client")
+        precondition(pinnedSpotify?.bundleID == "com.spotify.client" && pinnedSpotify?.isPlaying == false
+                     && pinnedSpotify?.usesRemoteMetadata == true, "A pinned paused song must retain its metadata")
         precondition(MediaPlaybackPolicy.resolve(title: "", bundleID: "", appName: "", pid: 0,
             isPlaying: false, browsers: []) == nil, "Closed players must not leave a phantom track")
         let spotify = MediaPlaybackPolicy.resolve(title: "Song B", bundleID: "com.spotify.client",

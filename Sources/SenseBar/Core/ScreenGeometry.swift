@@ -4,12 +4,10 @@ import Foundation
 /// Cung cấp số đo chuẩn phần cứng tai thỏ (Notch) và thanh Menu Bar / Capsule
 /// trên tất cả các dòng máy MacBook và màn hình ngoài của Apple.
 public struct ScreenGeometry: Equatable {
-    public let screen: CGRect
     public let cameraWidth: CGFloat
     public let cameraHeight: CGFloat
     public let isNotched: Bool
     public let menuBarHeight: CGFloat
-    public let backingScale: CGFloat
 
     // MARK: - Tiêu chuẩn phần cứng Apple Notch
     public static let standardNotchWidth: CGFloat = 185.0
@@ -18,9 +16,6 @@ public struct ScreenGeometry: Equatable {
     public static let standardBottomRadius: CGFloat = 10.0
 
     public init(for screen: NSScreen) {
-        self.screen = screen.frame
-        self.backingScale = screen.backingScaleFactor
-
         let safeTop = screen.safeAreaInsets.top
         let hasHardwareNotch = safeTop > 0 && screen.auxiliaryTopLeftArea != nil && screen.auxiliaryTopRightArea != nil
 
@@ -63,27 +58,16 @@ public struct ScreenGeometry: Equatable {
 
     /// Kích thước viên nang chuẩn trong Menu Bar (Học hỏi tỉ lệ vàng của vorssaint).
     /// - Parameters:
-    ///   - isPlaying: Có đang phát nhạc hay không.
-    ///   - hasPet: Có thú cưng đang hoạt động không.
     ///   - customWidth: Độ tinh chỉnh chiều rộng (px).
     ///   - customHeight: Độ tinh chỉnh chiều cao (px).
     /// - Returns: Kích thước `CGSize` của viên nang thu gọn.
     public func compactCapsuleSize(
-        isPlaying: Bool = false,
-        hasPet: Bool = false,
         customWidth: Double = 0,
         customHeight: Double = 0
     ) -> CGSize {
         let baseHeight: CGFloat = capsuleHeight + CGFloat(customHeight)
-        if isPlaying || hasPet {
-            // Khi phát nhạc hoặc có thú cưng: kích thước tiêu chuẩn ~ 135.0pt
-            let baseWidth: CGFloat = 135.0 + CGFloat(customWidth)
-            return CGSize(width: max(56.0, baseWidth), height: max(18.0, min(menuBarHeight, baseHeight)))
-        } else {
-            // Khi dừng nhạc ở trạng thái nghỉ (Resting Dynamic Island)
-            let baseWidth: CGFloat = 135.0 + CGFloat(customWidth)
-            return CGSize(width: max(56.0, baseWidth), height: max(18.0, min(menuBarHeight, baseHeight)))
-        }
+        let baseWidth: CGFloat = 135.0 + CGFloat(customWidth)
+        return CGSize(width: max(56.0, baseWidth), height: max(18.0, min(menuBarHeight, baseHeight)))
     }
 
     // MARK: - Kích thước chuẩn cho Notch

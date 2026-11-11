@@ -2,13 +2,6 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
-extension Notification.Name {
-    /// A file is being dragged toward the island while it shows where to drop it.
-    static let petDragMoved = Notification.Name("PetDragMoved")
-    /// An activity takes the place of the companion resting in the closed island.
-    static let petRestYields = Notification.Name("PetRestYields")
-}
-
 /// A one-off motion the companion plays over its face.
 enum PetCue: Equatable {
     /// Results turned up: a hop with smiling eyes.
@@ -342,16 +335,6 @@ final class PetRig: NSObject {
             move.isRemovedOnCompletion = false
             layer.add(move, forKey: "turn")
         }
-    }
-
-    /// Back to its own face at rest, with every motion taken off.
-    func reset(to mood: PetMood) {
-        stopBlinking()
-        for layer in [root, hopper, squasher, tilter, attention, face, leftEye, rightEye] { layer.removeAllAnimations() }
-        attention.transform = CATransform3DIdentity
-        self.mood = mood
-        blinks = 0
-        apply(mood.expression, animated: false)
     }
 
     // MARK: Attention
@@ -924,8 +907,6 @@ final class PetHostView: NSView {
     /// The pointer resting on it for a moment is a pat on the head.
     private var pettingWork: DispatchWorkItem?
     private var lastPetting: CFTimeInterval = 0
-    /// A cameo's reaction, waiting for it to land.
-    private nonisolated(unsafe) var cameoWork: DispatchWorkItem?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -944,69 +925,6 @@ final class PetHostView: NSView {
 
     deinit {
         if let visibilityObserver { NotificationCenter.default.removeObserver(visibilityObserver) }
-        if let dragObserver { NotificationCenter.default.removeObserver(dragObserver) }
-        if let yieldObserver { NotificationCenter.default.removeObserver(yieldObserver) }
-        cameoWork?.cancel()
-    }
-
-    /// In the island's drop hint, its eyes follow a file dragged anywhere on screen.
-    var followsDrag = false {
-        didSet {
-            guard followsDrag != oldValue else { return }
-            if let dragObserver { NotificationCenter.default.removeObserver(dragObserver) }
-            dragObserver = followsDrag
-                ? NotificationCenter.default.addObserver(forName: .petDragMoved, object: nil, queue: .main) {
-                    [weak self] _ in
-                    Task { @MainActor [weak self] in
-                        self?.followDrag()
-                    }
-                }
-                : nil
-        }
-    }
-    private nonisolated(unsafe) var dragObserver: NSObjectProtocol?
-
-    private func followDrag() {
-        guard let window else { return }
-        let point = convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
-        mascot.attend(to: PetEngine.pointerGaze(from: mascot.root.position, to: point, size: mascot.size))
-    }
-
-    /// Resting in the closed island, it fades out in the first half of the
-    /// crossfade an arriving activity brings, and the strip comes in over the
-    /// second. SwiftUI fades a hosted view out over the whole crossfade
-    /// whatever its transition says, which left it half seen over the text.
-    var yieldsToActivities = false {
-        didSet {
-            guard yieldsToActivities != oldValue else { return }
-            if let yieldObserver { NotificationCenter.default.removeObserver(yieldObserver) }
-            yieldObserver = yieldsToActivities
-                ? NotificationCenter.default.addObserver(forName: .petRestYields, object: nil, queue: .main) {
-                    [weak self] _ in
-                    Task { @MainActor [weak self] in
-                        self?.yieldToActivity()
-                    }
-                }
-                : nil
-        }
-    }
-    private nonisolated(unsafe) var yieldObserver: NSObjectProtocol?
-
-    private func yieldToActivity() {
-        guard window != nil, let root = layer else { return }
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 1
-        fade.toValue = 0
-        fade.duration = PetMotion.restCrossfade / 2
-        fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
-        fade.fillMode = .forwards
-        fade.isRemovedOnCompletion = false
-        root.add(fade, forKey: "yield")
-        // The view is gone once the crossfade is over. One still on screen
-        // after it comes back.
-        DispatchQueue.main.asyncAfter(deadline: .now() + PetMotion.restCrossfade * 2) { [weak self] in
-            self?.layer?.removeAnimation(forKey: "yield")
-        }
     }
 
     override var isFlipped: Bool { true }
@@ -1205,10 +1123,9 @@ final class PetHostView: NSView {
         mascot.play(cue)
     }
 
-    /// Plays `visit` once. A cameo's reaction plays as it lands, `lift`
-    /// being how high a hop may take it there.
+    /// Plays a walk once, preserving its final frame when it ends offstage.
     func playVisit(_ visit: PetVisit?, path: @autoclosure () -> PetPath, baseline: CGFloat,
-                   stand: CGPoint, lift: CGFloat) {
+                   stand: CGPoint) {
         let shift = figureShift
         let baseline = baseline - shift
         let stand = CGPoint(x: stand.x, y: stand.y - shift)
@@ -1221,27 +1138,13 @@ final class PetHostView: NSView {
         }
         guard visit.id != playedVisit else { return }
         playedVisit = visit.id
-        cameoWork?.cancel(); cameoWork = nil
         mascot.wake()
         mascot.playVisit(path(), greeting: visit.greeting, baseline: baseline, stand: stand, start: visit.start,
                          holdsEnd: visit.kind.endsOutOfSight)
-        guard let reaction = visit.kind.reaction else { return }
-        // A strip drawn again after it landed picks the visit up there, and
-        // does not play the reaction late. Lingering, it is already there.
-        let arrival = visit.kind == .linger(reaction) ? 0 : PetMotion.cameoArrival
-        let wait = visit.start + arrival - CACurrentMediaTime()
-        guard wait > -0.2 else { return }
-        let work = DispatchWorkItem { [weak self] in
-            self?.cameoWork = nil
-            self?.mascot.react(reaction, lift: lift)
-        }
-        cameoWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, wait), execute: work)
     }
 }
 
-/// The companion on its own, centred in its frame: the Command Bar's face
-/// and the Settings preview.
+/// The companion centred in its frame for onboarding and Settings previews.
 struct PetView: NSViewRepresentable {
     var look: PetLook
     var mood: PetMood = .idle
@@ -1250,14 +1153,11 @@ struct PetView: NSViewRepresentable {
     /// A one-off motion, played whenever `cueID` changes.
     var cue: PetCue? = nil
     var cueID = 0
-    /// Its eyes follow a file being dragged toward the island.
-    var followsDrag = false
     /// A reaction it plays once, as it first shows: a notice's.
     var reaction: PetReaction? = nil
 
     func makeNSView(context: Context) -> PetHostView {
         let view = PetHostView(frame: CGRect(x: 0, y: 0, width: size, height: size))
-        view.followsDrag = followsDrag
         view.configure(look: look, size: size, mood: mood, idles: idles,
                        reduceMotion: context.environment.accessibilityReduceMotion, animated: false)
         if let reaction {
@@ -1288,14 +1188,12 @@ struct PetTrackView: NSViewRepresentable {
     /// Whether it stands at its resting place, or only comes for the visit.
     var rests: Bool
     var visit: PetVisit?
-    /// The face it keeps at rest: wide awake while Keep Awake holds the Mac up.
+    /// The face it keeps while resting.
     var mood: PetMood = .idle
     var reaction: PetReactionEvent?
     /// Switched off, the Settings preview shows it asleep: eyes shut, no
     /// blinking, and no eyes for the pointer.
     var awake = true
-    /// It rests in the closed island and fades out early as an activity takes its place.
-    var yieldsToActivities = false
 
     func makeNSView(context: Context) -> PetHostView {
         PetHostView(frame: CGRect(x: 0, y: 0, width: track.width, height: track.height))
@@ -1316,12 +1214,8 @@ struct PetTrackView: NSViewRepresentable {
         }
         view.place(at: CGPoint(x: x, y: track.baseline), visible: visible)
         view.followsPointer = rests && awake
-        view.yieldsToActivities = yieldsToActivities
-        // A countdown is watched from the camera's left whatever the side.
-        let stand = visit?.kind.watchesTimer == true ? track.leftSide.rest : track.rest
         view.playVisit(visit, path: PetMotion.path(for: visit?.kind ?? .pass, on: track),
-                       baseline: track.baseline, stand: CGPoint(x: stand, y: track.baseline),
-                       lift: track.hop(0.22))
+                       baseline: track.baseline, stand: CGPoint(x: track.rest, y: track.baseline))
         if rests { view.react(reaction, lift: track.hop(0.22)) }
     }
 

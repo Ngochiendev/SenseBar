@@ -113,6 +113,22 @@ enum PetStatusCue: String, Identifiable {
 
     var id: String { rawValue }
 
+    @MainActor
+    func title(using l10n: L10n) -> String {
+        switch self {
+        case .greeting: l10n.string(vi: "Xin chào", en: "Hello")
+        case .downloaded: l10n.string(vi: "Tải xong", en: "Downloaded")
+        case .lowBattery: l10n.string(vi: "Pin yếu", en: "Low battery")
+        case .charging: l10n.string(vi: "Đang sạc", en: "Charging")
+        case .downloadError: l10n.string(vi: "Tải lỗi", en: "Download error")
+        case .dancing: l10n.string(vi: "Quẩy nhạc", en: "Dance")
+        case .love: l10n.string(vi: "Yêu bạn", en: "Love")
+        case .sleeping: l10n.string(vi: "Ngủ ngon", en: "Sleeping")
+        case .muted: l10n.string(vi: "Đã tắt mic", en: "Mic muted")
+        case .ready: l10n.string(vi: "Sẵn sàng", en: "Ready")
+        }
+    }
+
     var symbol: String {
         switch self {
         case .greeting: "hand.wave.fill"
@@ -681,53 +697,10 @@ struct PetVisit: Equatable {
         case lap
         /// Băng ngang từ đầu bên này sang đầu bên kia của đảo.
         case pass
-        /// Xuất hiện từ sau camera trở về vị trí đứng nghỉ.
-        case home
-        /// Xuất hiện chớp nhoáng (cameo) để thể hiện một phản ứng rồi trở về sau camera.
-        case cameo(PetReaction)
-        /// Nhảy theo dõi những giây cuối cùng của đồng hồ đếm ngược.
-        case countdown(TimeInterval)
-        /// Rút lui về sau camera khi đồng hồ bị tạm dừng.
-        case retreat
-        /// Chào tạm biệt và biến mất khi người dùng tắt tính năng thú cưng.
-        case farewell
-        /// Di chuyển băng ngang từ cánh này sang cánh đối diện của camera.
-        case cross
-        /// Bước ra xuất hiện khi vừa kích hoạt bật tính năng.
-        case arrive
-        /// Nán lại đúng vị trí đang đứng để thực hiện phản ứng rồi rút lui.
-        case linger(PetReaction)
 
         /// Xác định hành trình kết thúc ở vị trí khuất tầm nhìn (sau camera hoặc ngoài biên).
         var endsOutOfSight: Bool {
-            switch self {
-            case .pass, .cameo, .countdown, .retreat, .farewell, .linger: return true
-            case .lap, .home, .cross, .arrive: return false
-            }
-        }
-
-        /// Xác định thú cưng đang theo dõi đồng hồ đếm ngược.
-        var watchesTimer: Bool {
-            switch self {
-            case .countdown, .retreat: return true
-            default: return false
-            }
-        }
-
-        /// Xác định hành trình chỉ chiếm dụng duy nhất một bên cánh tai thỏ.
-        var takesOnlyItsWing: Bool {
-            switch self {
-            case .countdown, .retreat, .cameo, .linger: return true
-            default: return false
-            }
-        }
-
-        /// Trả về phản ứng đi kèm của chuyến đi nếu có.
-        var reaction: PetReaction? {
-            switch self {
-            case .cameo(let reaction), .linger(let reaction): return reaction
-            default: return nil
-            }
+            self == .pass
         }
     }
 
@@ -810,68 +783,25 @@ struct PetPath: Equatable {
 enum PetMotion {
     static let lapDuration: TimeInterval = 3.6
     static let passDuration: TimeInterval = 3.4
-    static let homeDuration: TimeInterval = 0.62
-    static let cameoArrival: TimeInterval = 0.5
-    static let cameoExit: TimeInterval = 0.32
-    static let farewellDuration: TimeInterval = 0.78
-    static let crossDuration: TimeInterval = 1.24
-    static let restCrossfade: TimeInterval = 0.2
-    static let countdownLead: TimeInterval = 5.0
-    static let countdownLinger: TimeInterval = 0.1
 
     /// Tính tổng thời lượng của một hành trình di chuyển.
     static func duration(of kind: PetVisit.Kind) -> TimeInterval {
         switch kind {
         case .lap: return lapDuration
         case .pass: return passDuration
-        case .home, .arrive: return homeDuration
-        case .cameo(let reaction): return cameoArrival + cameoHold(reaction) + cameoExit
-        case .linger(let reaction): return cameoHold(reaction) + cameoExit
-        case .countdown(let total): return total + countdownLinger + cameoExit
-        case .retreat: return cameoExit
-        case .farewell: return farewellDuration
-        case .cross: return crossDuration
         }
-    }
-
-    /// Thời gian nán lại giữ phản ứng cảm xúc tại vị trí.
-    static func cameoHold(_ reaction: PetReaction) -> TimeInterval {
-        reaction.length + 0.3
-    }
-
-    /// Mốc thời gian hoàn trả không gian đảo lại cho tác vụ nền.
-    static func handBack(of kind: PetVisit.Kind, floats: Bool) -> TimeInterval? {
-        guard let reaction = kind.reaction else { return nil }
-        let arrival = kind == .linger(reaction) ? 0.0 : cameoArrival
-        return arrival + cameoHold(reaction) + (floats ? cameoExit / 4.0 : 0.0)
     }
 
     /// Tính toán quỹ đạo chuyển động chi tiết dựa trên loại hành trình và thông số đường chạy.
     static func path(for kind: PetVisit.Kind, on track: PetTrack) -> PetPath {
-        switch kind {
-        case .countdown(let total): return countdown(on: track.leftSide, total: total)
-        case .retreat: return retreat(on: track.leftSide)
-        default: break
-        }
-
         guard track.mirrored else {
             switch kind {
             case .lap: return lap(on: track)
             case .pass: return pass(on: track)
-            case .home: return home(on: track)
-            case .cameo(let reaction): return cameo(on: track, hold: cameoHold(reaction))
-            case .linger(let reaction): return linger(on: track, hold: cameoHold(reaction))
-            case .farewell: return farewell(on: track)
-            case .cross: return cross(on: track)
-            case .arrive: return arrive(on: track)
-            case .countdown, .retreat: return PetPath()
             }
         }
 
-        var left = track
-        left.mirrored = false
-        left.rest = track.width - track.rest
-        var mirroredPath = self.path(for: kind, on: left)
+        var mirroredPath = self.path(for: kind, on: track.leftSide)
         mirroredPath.x = mirroredPath.x.map { track.width - $0 }
         mirroredPath.gaze = mirroredPath.gaze.map { -$0 }
         return mirroredPath
@@ -933,129 +863,6 @@ enum PetMotion {
         var path = sample(steps, start: -size, track: track, duration: passDuration)
         path.greeting = 0.55...1.55
         return path
-    }
-
-    static func home(on track: PetTrack) -> PetPath {
-        guard let hidden = track.hidden else {
-            var path = sample([.stay(0.08), .hop(to: track.rest, 0.36, height: track.hop(0.2))],
-                              start: track.rest, track: track, duration: homeDuration)
-            path.greeting = 0...0.4
-            return path
-        }
-        var path = sample([.stay(0.06), .hop(to: track.rest, 0.42, height: track.hop(0.2))],
-                          start: track.behindCamera(hidden, margin: 2), track: track, duration: homeDuration)
-        path.greeting = 0...0.44
-        return path
-    }
-
-    static func cameo(on track: PetTrack, hold: TimeInterval) -> PetPath {
-        let size = track.size
-        let duration = cameoArrival + hold + cameoExit
-        guard let hidden = track.hidden else {
-            return sample(
-                [.stay(0.06), .hop(to: track.rest, cameoArrival - 0.06, height: track.hop(0.3)), .stay(hold),
-                 .walk(to: track.width + size, cameoExit)],
-                start: -size, track: track, duration: duration
-            )
-        }
-        let behind = track.behindCamera(hidden, margin: 1)
-        return sample(
-            [.stay(0.06), .hop(to: track.rest, cameoArrival - 0.06, height: track.hop(0.2)), .stay(hold),
-             .hop(to: behind, cameoExit, height: track.hop(0.16))],
-            start: behind, track: track, duration: duration
-        )
-    }
-
-    static func linger(on track: PetTrack, hold: TimeInterval) -> PetPath {
-        let duration = hold + cameoExit
-        guard let hidden = track.hidden else {
-            return sample([.stay(hold), .walk(to: track.width + track.size, cameoExit)],
-                          start: track.rest, track: track, duration: duration)
-        }
-        return sample([.stay(hold), .hop(to: track.behindCamera(hidden, margin: 1), cameoExit, height: track.hop(0.16))],
-                      start: track.rest, track: track, duration: duration)
-    }
-
-    static func countdown(on track: PetTrack, total: TimeInterval) -> PetPath {
-        let size = track.size
-        let duration = total + countdownLinger + cameoExit
-        guard let hidden = track.hidden else {
-            return sample([.stay(duration)], start: -size, track: track, duration: duration)
-        }
-        let behind = track.behindCamera(hidden, margin: 1)
-        var steps: [MotionStep] = [.stay(0.06), .hop(to: track.rest, cameoArrival - 0.06, height: track.hop(0.2))]
-        var time = cameoArrival
-        let ticks = stride(from: total.rounded(.up) - 1, through: 1, by: -1)
-            .map { total - $0 }
-            .filter { $0 - 0.15 > time + 0.1 }
-
-        for tick in ticks {
-            steps.append(.stay(tick - 0.15 - time))
-            steps.append(.hop(to: track.rest, 0.3, height: track.hop(0.1)))
-            time = tick + 0.15
-        }
-        steps.append(.stay(max(0, total + countdownLinger - time)))
-        steps.append(.hop(to: behind, cameoExit, height: track.hop(0.16)))
-
-        var path = sample(steps, start: behind, track: track, duration: duration)
-        path.gaze = zip(path.keyTimes, path.gaze).map { keyTime, gaze in
-            let elapsed = keyTime * duration
-            return (elapsed >= cameoArrival && elapsed <= total + countdownLinger) ? 0.07 : gaze
-        }
-        return path
-    }
-
-    static func arrive(on track: PetTrack) -> PetPath {
-        guard track.hidden == nil else { return home(on: track) }
-        var path = sample([.stay(0.06), .hop(to: track.rest, 0.46, height: track.hop(0.3))],
-                          start: -track.size, track: track, duration: homeDuration)
-        path.greeting = 0...0.52
-        return path
-    }
-
-    static func cross(on track: PetTrack) -> PetPath {
-        guard let hidden = track.hidden else { return home(on: track) }
-        let size = track.size
-        var path = sample(
-            [
-                .stay(0.06),
-                .hop(to: hidden.upperBound - size / 2.0 - 2.0 * track.scale, 0.34, height: track.hop(0.24)),
-                .walk(to: track.behindCamera(hidden, margin: 2), 0.38),
-                .hop(to: track.rest, 0.36, height: track.hop(0.24)),
-                .stay(0.1)
-            ],
-            start: track.farSpot, track: track, duration: crossDuration
-        )
-        path.greeting = 0.72...crossDuration
-        return path
-    }
-
-    static func farewell(on track: PetTrack) -> PetPath {
-        let size = track.size
-        guard let hidden = track.hidden else {
-            var path = sample(
-                [.stay(0.06), .hop(to: track.rest, 0.3, height: track.hop(0.22)), .stay(0.02),
-                 .walk(to: track.width + size, 0.4)],
-                start: track.rest, track: track, duration: farewellDuration
-            )
-            path.greeting = 0...0.44
-            return path
-        }
-        var path = sample(
-            [.stay(0.06), .hop(to: track.rest, 0.3, height: track.hop(0.22)), .stay(0.08),
-             .hop(to: track.behindCamera(hidden, margin: 1), cameoExit, height: track.hop(0.16))],
-            start: track.rest, track: track, duration: farewellDuration
-        )
-        path.greeting = 0...0.48
-        return path
-    }
-
-    static func retreat(on track: PetTrack) -> PetPath {
-        guard let hidden = track.hidden else {
-            return sample([.stay(cameoExit)], start: -track.size, track: track, duration: cameoExit)
-        }
-        return sample([.hop(to: track.behindCamera(hidden, margin: 1), cameoExit, height: track.hop(0.16))],
-                      start: track.rest, track: track, duration: cameoExit)
     }
 
     // MARK: - Bộ lấy mẫu Keyframe Động học (60 FPS Kinematics Sampler)

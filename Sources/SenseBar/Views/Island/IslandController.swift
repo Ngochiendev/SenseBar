@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import SwiftUI
 
 // MARK: - NotchPanel tùy chỉnh (Luôn giữ active appearance cho Liquid Glass & hỗ trợ đa màn hình)
@@ -46,8 +45,6 @@ final class IslandController: ObservableObject {
     private var hoverWorkItem: DispatchWorkItem?
     private var collapseWorkItem: DispatchWorkItem?
     private var isPinnedOpen = false
-    private var musicCancellable: AnyCancellable?
-    private var pauseObserver: NSObjectProtocol?
 
     private init() {
         registerDefaultPreferences()
@@ -88,46 +85,6 @@ final class IslandController: ObservableObject {
                 self?.syncFullscreenState()
             }
         }
-
-        pauseObserver = NotificationCenter.default.addObserver(
-            forName: Notification.Name("SenseBarMusicDidPause"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                if self.isExpanded {
-                    self.isPinnedOpen = false
-                    self.collapseWorkItem?.cancel()
-                    self.collapseWorkItem = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                        guard let self else { return }
-                        if MusicService.shared.track?.isPlaying != true {
-                            self.collapse()
-                        }
-                    }
-                }
-            }
-        }
-
-        musicCancellable = MusicService.shared.$track
-            .map { $0?.isPlaying == true }
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] isPlaying in
-                guard let self else { return }
-                if !isPlaying && self.isExpanded {
-                    self.isPinnedOpen = false
-                    self.collapseWorkItem?.cancel()
-                    self.collapseWorkItem = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) { [weak self] in
-                        guard let self else { return }
-                        if MusicService.shared.track?.isPlaying != true {
-                            self.collapse()
-                        }
-                    }
-                }
-            }
     }
 
     private func registerDefaultPreferences() {
@@ -176,13 +133,11 @@ final class IslandController: ObservableObject {
         }
         let fitWidth = UserDefaults.standard.double(forKey: DefaultsKey.notchCapsuleFitWidth)
         let fitHeight = UserDefaults.standard.double(forKey: DefaultsKey.notchCapsuleFitHeight)
-        let isPlaying = MusicService.shared.track?.isPlaying == true
+        let isPlaying = MusicService.shared.hasMediaPresentation
         let hasPet = PetService.shared.isEnabled
 
         if usesCapsule(on: screen) {
             return geo.compactCapsuleSize(
-                isPlaying: isPlaying,
-                hasPet: hasPet,
                 customWidth: fitWidth,
                 customHeight: fitHeight
             )
@@ -253,6 +208,7 @@ final class IslandController: ObservableObject {
 
     /// Được gọi khi macOS cấp quyền Accessibility.
     func permissionDidGrant() {
+        MusicService.shared.refreshNowPlaying()
         restartMouseTracking()
         syncVisibility()
         repositionPanel()
@@ -274,6 +230,7 @@ final class IslandController: ObservableObject {
     /// Mở rộng Dynamic Island để hiển thị bảng điều khiển nhạc chi tiết.
     /// - Parameter pinned: `true` nếu mở bằng cách nhấp chuột (cần giữ mở cho đến khi bấm ngoài).
     func expand(Pinned pinned: Bool = false) {
+        if !isExpanded { MusicService.shared.refreshNowPlaying() }
         hoverWorkItem?.cancel()
         hoverWorkItem = nil
         collapseWorkItem?.cancel()
@@ -682,12 +639,13 @@ final class IslandController: ObservableObject {
         }
 
         let expandOnHover = UserDefaults.standard.bool(forKey: DefaultsKey.notchExpandOnHover)
-        let isMusicPlaying = MusicService.shared.track?.isPlaying == true
         if inside {
             collapseWorkItem?.cancel()
             collapseWorkItem = nil
-            // Chỉ mở rộng khi rê chuột nếu đang có bài hát đang phát
-            if expandOnHover && !isExpanded && isMusicPlaying && DeviceNoticeService.shared.current == nil {
+            if type == .leftMouseDown && DeviceNoticeService.shared.current == nil {
+                expand(Pinned: true)
+            }
+            if expandOnHover && !isExpanded && DeviceNoticeService.shared.current == nil {
                 scheduleHoverExpand(after: 0.08)
             }
         } else {
@@ -712,7 +670,6 @@ final class IslandController: ObservableObject {
                   !self.isExpanded,
                   DeviceNoticeService.shared.current == nil,
                   UserDefaults.standard.bool(forKey: DefaultsKey.notchExpandOnHover),
-                  MusicService.shared.track?.isPlaying == true,
                   self.isPointInsideIsland(NSEvent.mouseLocation) else {
                 return
             }

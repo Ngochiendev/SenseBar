@@ -267,7 +267,7 @@ struct IslandView: View {
                 : AnyShape(NotchAttachedShape(topShoulder: shoulder, bottomRadius: bottom))
         )
         .onTapGesture {
-            guard !controller.isExpanded, music.track?.isPlaying == true else { return }
+            guard !controller.isExpanded, notices.current == nil else { return }
             controller.expand(Pinned: true)
         }
     }
@@ -355,7 +355,7 @@ struct IslandView: View {
 
                         if showVisualizer {
                             EqualizerBars(
-                                isPlaying: true,
+                                isPlaying: playingTrack.isPlaying,
                                 bars: 7,
                                 barWidth: 1.8,
                                 height: 14,
@@ -376,8 +376,7 @@ struct IslandView: View {
                         visit: pet.currentVisit,
                         mood: pet.mood,
                         reaction: pet.currentReaction,
-                        awake: pet.isEnabled,
-                        yieldsToActivities: !pet.hasActivePresentation
+                        awake: pet.isEnabled
                     )
                     .frame(width: size.width, height: size.height)
                 }
@@ -440,7 +439,7 @@ struct IslandView: View {
                             Spacer(minLength: 0)
                             if showVisualizer {
                                 EqualizerBars(
-                                    isPlaying: true,
+                                    isPlaying: playingTrack.isPlaying,
                                     bars: 7,
                                     barWidth: 1.8,
                                     height: 14,
@@ -463,8 +462,7 @@ struct IslandView: View {
                         visit: pet.currentVisit,
                         mood: pet.mood,
                         reaction: pet.currentReaction,
-                        awake: pet.isEnabled,
-                        yieldsToActivities: !pet.hasActivePresentation
+                        awake: pet.isEnabled
                     )
                     .frame(width: size.width, height: size.height)
                 }
@@ -482,7 +480,7 @@ struct IslandView: View {
     @ViewBuilder
     private func petStatusCue(_ cue: PetStatusCue, size: CGSize, isPill: Bool,
                               geo: ScreenGeometry) -> some View {
-        let label = Label(statusTitle(cue), systemImage: cue.symbol)
+        let label = Label(cue.title(using: l10n), systemImage: cue.symbol)
             .font(.system(size: 9.5, weight: .semibold))
             .foregroundStyle(.white)
             .lineLimit(1)
@@ -508,67 +506,129 @@ struct IslandView: View {
         }
     }
 
-    private func statusTitle(_ cue: PetStatusCue) -> String {
-        switch cue {
-        case .greeting: l10n.string(vi: "Xin chào", en: "Hello")
-        case .downloaded: l10n.string(vi: "Tải xong", en: "Downloaded")
-        case .lowBattery: l10n.string(vi: "Pin yếu", en: "Low battery")
-        case .charging: l10n.string(vi: "Đang sạc", en: "Charging")
-        case .downloadError: l10n.string(vi: "Tải lỗi", en: "Download error")
-        case .dancing: l10n.string(vi: "Quẩy nhạc", en: "Dance")
-        case .love: l10n.string(vi: "Yêu bạn", en: "Love")
-        case .sleeping: l10n.string(vi: "Ngủ ngon", en: "Sleeping")
-        case .muted: l10n.string(vi: "Đã tắt mic", en: "Mic muted")
-        case .ready: l10n.string(vi: "Sẵn sàng", en: "Ready")
+    // MARK: - Trạng thái Mở rộng (Expanded)
+
+    private var expandedHeader: some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill((music.track?.isPlaying == true) ? Color.green : Color.white.opacity(0.35))
+                    .frame(width: 6, height: 6)
+                Text(music.sourceDisplayName)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer()
+                .frame(width: isPillMode ? 24 : controller.cameraCutoutWidth)
+
+            HStack(spacing: 8) {
+                if showVisualizer {
+                    EqualizerBars(
+                        isPlaying: music.track?.isPlaying == true,
+                        bars: 7,
+                        barWidth: 2.2,
+                        height: 14,
+                        tint: music.accentColor
+                    )
+                }
+
+                // Bộ chọn nguồn phát (Auto / Ghim ứng dụng)
+                Menu {
+                    Button {
+                        music.selectSource("auto")
+                        controller.expand(Pinned: true)
+                    } label: {
+                        HStack {
+                            Text(l10n.string(vi: "Tự động (Khuyên dùng)", en: "Automatic (Recommended)"))
+                            if music.preferredSource == "auto" {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+
+                    if !music.availableSources.isEmpty {
+                        Divider()
+
+                        ForEach(music.availableSources) { source in
+                            Button {
+                                music.selectSource(source.bundleID)
+                                controller.expand(Pinned: true)
+                            } label: {
+                                HStack {
+                                    Text(source.appName + (source.isPlaying
+                                        ? l10n.string(vi: " · Đang phát", en: " · Playing")
+                                        : l10n.string(vi: " · Đã tạm dừng", en: " · Paused")))
+                                    if music.preferredSource == source.bundleID {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: music.preferredSource == "auto" ? "waveform.badge.magnifyingglass" : "pin.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                    }
+                    .foregroundStyle(music.preferredSource == "auto" ? Color.white.opacity(0.70) : music.accentColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3.5)
+                    .background(Capsule().fill(Color.white.opacity(0.12)))
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help(music.preferredSource == "auto"
+                    ? l10n.string(vi: "Nguồn phát: Tự động", en: "Media Source: Automatic")
+                    : l10n.string(vi: "Đã ghim nguồn phát: \(music.sourceDisplayName)", en: "Pinned Source: \(music.sourceDisplayName)"))
+
+                Button {
+                    controller.collapse()
+                } label: {
+                    Image(systemName: "chevron.up.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .frame(height: max(26, controller.cameraCutoutHeight - 4))
+        .padding(.horizontal, 22)
+    }
+
+    private var openSelectedSourceAction: some View {
+        Button {
+            music.openPlayerApp()
+        } label: {
+            Label(l10n.string(vi: "Mở \(music.sourceDisplayName)", en: "Open \(music.sourceDisplayName)"),
+                  systemImage: "arrow.up.forward.app")
+                .font(.system(size: 11, weight: .semibold))
         }
     }
 
-    // MARK: - Trạng thái Mở rộng (Expanded)
+    @ViewBuilder
+    private var openSelectedSourceButton: some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            openSelectedSourceAction.buttonStyle(.glass)
+        } else {
+            openSelectedSourceAction.buttonStyle(.bordered)
+        }
+        #else
+        openSelectedSourceAction.buttonStyle(.bordered)
+        #endif
+    }
 
     @ViewBuilder
     private var expandedContent: some View {
-        if let track = music.track {
-            VStack(spacing: 10) {
-                // Hàng trên cùng: Trạng thái phát & Nút thu gọn
-                HStack(spacing: 0) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(track.isPlaying ? Color.green : Color.white.opacity(0.35))
-                            .frame(width: 6, height: 6)
-                        Text(track.appName)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.82))
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Spacer()
-                        .frame(width: isPillMode ? 24 : controller.cameraCutoutWidth)
-
-                    HStack(spacing: 8) {
-                        if showVisualizer {
-                            EqualizerBars(
-                                isPlaying: track.isPlaying,
-                                bars: 7,
-                                barWidth: 2.2,
-                                height: 14,
-                                tint: music.accentColor
-                            )
-                        }
-                        Button {
-                            controller.collapse()
-                        } label: {
-                            Image(systemName: "chevron.up.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(.white.opacity(0.55))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-                .frame(height: max(26, controller.cameraCutoutHeight - 4))
-                .padding(.horizontal, 22)
-
+        VStack(spacing: 10) {
+            expandedHeader
+            if let track = music.track {
                 // Nội dung: Ảnh bìa, thông tin bài hát và thanh tiến trình
                 HStack(spacing: 14) {
                     Button {
@@ -616,6 +676,7 @@ struct IslandView: View {
                                 )
                             }
                             .frame(height: 8)
+                            .allowsHitTesting(track.supportsSeeking)
 
                             HStack {
                                 Text(NowPlayingTrack.formattedTime(track.elapsed))
@@ -637,7 +698,9 @@ struct IslandView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.up.forward.app.fill")
                                 .font(.system(size: 10.5))
-                            Text(l10n.string(vi: "Mở App", en: "Open App"))
+                            Text(track.supportsTransportControls
+                                 ? l10n.string(vi: "Mở App", en: "Open App")
+                                 : l10n.string(vi: "Mở để phát", en: "Open to play"))
                                 .font(.system(size: 10.5, weight: .semibold))
                         }
                         .foregroundStyle(.white.opacity(0.75))
@@ -658,8 +721,8 @@ struct IslandView: View {
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
-                    .disabled(!track.supportsTransportControls)
-                    .opacity(track.supportsTransportControls ? 1 : 0.35)
+                    .disabled(!track.supportsPrevious)
+                    .opacity(track.supportsPrevious ? 1 : 0.35)
 
                     Button {
                         music.togglePlayPause()
@@ -673,6 +736,9 @@ struct IslandView: View {
                     .buttonStyle(.plain)
                     .disabled(!track.supportsTransportControls)
                     .opacity(track.supportsTransportControls ? 1 : 0.35)
+                    .help(track.supportsTransportControls
+                        ? l10n.string(vi: "Phát / Tạm dừng", en: "Play / Pause")
+                        : l10n.string(vi: "Mở ứng dụng để tiếp tục phát nguồn này.", en: "Open the app to resume this source."))
 
                     Button {
                         music.nextTrack()
@@ -683,8 +749,8 @@ struct IslandView: View {
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
-                    .disabled(!track.supportsTransportControls)
-                    .opacity(track.supportsTransportControls ? 1 : 0.35)
+                    .disabled(!track.supportsNext)
+                    .opacity(track.supportsNext ? 1 : 0.35)
 
                     Spacer()
 
@@ -705,6 +771,26 @@ struct IslandView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 22)
+                .padding(.bottom, 12)
+            } else {
+                VStack(spacing: 10) {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.white.opacity(0.55))
+                    Text(l10n.string(vi: "Chưa có nội dung phát", en: "No media loaded"))
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(music.preferredSource == "auto"
+                         ? l10n.string(vi: "Phát nhạc hoặc chọn một nguồn ở phía trên.", en: "Start playback or choose a source above.")
+                         : l10n.string(vi: "Mở \(music.sourceDisplayName) và chọn bài để tiếp tục.", en: "Open \(music.sourceDisplayName) and load media to continue."))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .multilineTextAlignment(.center)
+                    if music.preferredSource != "auto" {
+                        openSelectedSourceButton
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, 22)
                 .padding(.bottom, 12)
             }

@@ -29,6 +29,7 @@ final class PetService: ObservableObject {
     private var lastGreeting = Date.distantPast
     private var idleResetUptime = ProcessInfo.processInfo.systemUptime
     private var statusCueTask: Task<Void, Never>?
+    private var automaticGreetingID: UUID?
 
     /// Hiển thị tia sét cùng hoạt cảnh vui khi cắm sạc hoặc bấm thử.
     func chargingConnected() { present(.charging, reaction: .love, cue: .charging) }
@@ -66,6 +67,13 @@ final class PetService: ObservableObject {
                 guard let self else { return }
                 self.isMediaPlaying = playing
                 if playing {
+                    if let greetingID = self.automaticGreetingID, self.currentReaction?.id == greetingID {
+                        self.currentReaction = nil
+                        self.automaticGreetingID = nil
+                        self.statusCueTask?.cancel()
+                        self.currentStatusCue = nil
+                        self.mood = .idle
+                    }
                     self.visitTimer?.invalidate()
                     self.visitTimer = nil
                     self.currentVisit = nil
@@ -102,21 +110,24 @@ final class PetService: ObservableObject {
     private func greet() {
         guard isEnabled else { return }
         idleResetUptime = ProcessInfo.processInfo.systemUptime
+        guard !isMediaPlaying, MusicService.shared.track?.isPlaying != true else { return }
         guard Date().timeIntervalSince(lastGreeting) > 10 else { return }
         lastGreeting = Date()
-        present(.wink, reaction: .wakeUp, cue: .greeting)
+        present(.wink, reaction: .wakeUp, cue: .greeting, automatic: true)
     }
 
-    private func present(_ nextMood: PetMood, reaction: PetReaction, cue: PetStatusCue) {
+    private func present(_ nextMood: PetMood, reaction: PetReaction, cue: PetStatusCue, automatic: Bool = false) {
         guard isEnabled else { return }
         currentVisit = nil
         let event = PetReactionEvent(id: UUID(), reaction: reaction, start: CACurrentMediaTime())
         mood = nextMood
         currentReaction = event
+        automaticGreetingID = automatic ? event.id : nil
         showStatus(cue)
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
             guard let self, self.currentReaction?.id == event.id else { return }
             self.currentReaction = nil
+            self.automaticGreetingID = nil
             self.mood = self.idleMood
         }
     }
@@ -154,7 +165,7 @@ final class PetService: ObservableObject {
                 guard let self, let before, let next else { return }
                 if !before.external && next.external { self.chargingConnected() }
                 if let old = before.percent, let level = next.percent,
-                   old > 20, level <= 20, !next.external { self.react(.yawn) }
+                   old > 20, level <= 20, !next.external { self.triggerReaction(.yawn) }
             }.store(in: &cancellables)
     }
 
@@ -171,6 +182,7 @@ final class PetService: ObservableObject {
             visitTimer = nil
             currentVisit = nil
             currentReaction = nil
+            automaticGreetingID = nil
             currentStatusCue = nil
             statusCueTask?.cancel()
             mood = .idle
@@ -245,11 +257,6 @@ final class PetService: ObservableObject {
         default: (nextMood, cue) = (.happy, .ready)
         }
         present(nextMood, reaction: reaction, cue: cue)
-    }
-
-    /// Kích hoạt phản ứng cảm xúc tương thích ngược
-    func react(_ reaction: PetReaction) {
-        triggerReaction(reaction)
     }
 
     private func scheduleNextVisit() {

@@ -25,7 +25,7 @@ struct PetInteractionStage: View {
                                 .frame(width: track.width, height: track.height)
                         }
                     if let cue = pet.currentStatusCue {
-                        Label(statusTitle(cue), systemImage: cue.symbol)
+                        Label(cue.title(using: l10n), systemImage: cue.symbol)
                             .font(.system(size: 9, weight: .medium))
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(.regularMaterial, in: Capsule())
@@ -54,21 +54,6 @@ struct PetInteractionStage: View {
         .padding(8)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 11))
         .animation(.easeInOut(duration: 0.18), value: pet.currentStatusCue?.id)
-    }
-
-    private func statusTitle(_ cue: PetStatusCue) -> String {
-        switch cue {
-        case .greeting: l10n.string(vi: "Xin chào", en: "Hello")
-        case .downloaded: l10n.string(vi: "Tải xong", en: "Downloaded")
-        case .lowBattery: l10n.string(vi: "Pin yếu", en: "Low battery")
-        case .charging: l10n.string(vi: "Đang sạc", en: "Charging")
-        case .downloadError: l10n.string(vi: "Tải lỗi", en: "Download error")
-        case .dancing: l10n.string(vi: "Quẩy nhạc", en: "Dance")
-        case .love: l10n.string(vi: "Yêu bạn", en: "Love")
-        case .sleeping: l10n.string(vi: "Ngủ ngon", en: "Sleeping")
-        case .muted: l10n.string(vi: "Đã tắt mic", en: "Mic muted")
-        case .ready: l10n.string(vi: "Sẵn sàng", en: "Ready")
-        }
     }
 
     private func chip(_ vi: String, _ en: String, symbol: String, color: Color,
