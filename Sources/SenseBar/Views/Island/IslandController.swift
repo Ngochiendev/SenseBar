@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import QuartzCore
 
 // MARK: - NotchPanel tùy chỉnh (Luôn giữ active appearance cho Liquid Glass & hỗ trợ đa màn hình)
 
@@ -8,6 +9,33 @@ final class IslandPanel: NSPanel {
         .canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle
     ]
     static let normalLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 1)
+    private(set) var wantsVisible = false
+    private var visibilityRevision = 0
+
+    func setVisible(_ visible: Bool, animated: Bool = true, onHidden: (@MainActor () -> Void)? = nil) {
+        guard wantsVisible != visible || (!animated && isVisible != visible) else { return }
+        wantsVisible = visible
+        visibilityRevision += 1
+        let revision = visibilityRevision
+        if visible && !isVisible {
+            alphaValue = 0
+            orderFrontRegardless()
+        }
+        if !visible { ignoresMouseEvents = true }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                ? (visible ? 0.28 : 0.22) : 0
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            animator().alphaValue = visible ? 1 : 0
+        } completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.visibilityRevision == revision, !self.wantsVisible else { return }
+                self.orderOut(nil)
+                onHidden?()
+            }
+        }
+    }
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
@@ -193,7 +221,7 @@ final class IslandController: ObservableObject {
             if let localMouseMonitor { NSEvent.removeMonitor(localMouseMonitor); self.localMouseMonitor = nil }
             hoverWorkItem?.cancel()
             collapseWorkItem?.cancel()
-            mainPanel?.orderOut(nil)
+            mainPanel?.setVisible(false, animated: false)
             closeAllMirrors()
             syncFullscreenMonitoring()
             return
@@ -314,15 +342,10 @@ final class IslandController: ObservableObject {
             mainPanel.setFrame(frame, display: true)
 
             let isFs = FullscreenDetector.isFullscreen(on: activeScreen)
-            if hideInFullscreen && isFs {
-                mainPanel.orderOut(nil)
-            } else {
-                mainPanel.orderFrontRegardless()
-            }
-
             if let hostingView = mainPanel.contentView as? IslandHostingView<IslandView> {
                 hostingView.rootView = IslandView(controller: self, displayID: activeScreen.displayID, isMirror: false)
             }
+            setPanelVisible(mainPanel, !(hideInFullscreen && isFs))
         }
 
         // Nếu người dùng chọn "Tất cả màn hình" (All displays)
@@ -332,7 +355,7 @@ final class IslandController: ObservableObject {
 
             // Dọn mirror của màn hình đã rút hoặc màn hình vừa trở thành activeScreen
             for (id, mirror) in mirrorPanels where id == activeID || !allScreens.contains(where: { $0.displayID == id }) {
-                mirror.orderOut(nil)
+                mirror.setVisible(false, animated: false)
                 mirrorPanels[id] = nil
             }
 
@@ -355,11 +378,7 @@ final class IslandController: ObservableObject {
                 }
 
                 let isMirrorFs = FullscreenDetector.isFullscreen(on: screen)
-                if hideInFullscreen && isMirrorFs {
-                    mirror.orderOut(nil)
-                } else {
-                    mirror.orderFrontRegardless()
-                }
+                setPanelVisible(mirror, !(hideInFullscreen && isMirrorFs))
             }
         } else {
             closeAllMirrors()
@@ -377,12 +396,12 @@ final class IslandController: ObservableObject {
             return
         }
         guard fullscreenTimer == nil else { return }
-        let timer = Timer(timeInterval: 2.5, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.4, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.syncFullscreenState()
             }
         }
-        timer.tolerance = 0.5
+        timer.tolerance = 0.08
         fullscreenTimer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
@@ -392,11 +411,11 @@ final class IslandController: ObservableObject {
         let hideInFullscreen = UserDefaults.standard.bool(forKey: DefaultsKey.notchHideInFullscreen)
 
         guard hideInFullscreen else {
-            if let mainPanel, !mainPanel.isVisible {
-                mainPanel.orderFrontRegardless()
+            if let mainPanel {
+                setPanelVisible(mainPanel, true)
             }
-            for (_, mirror) in mirrorPanels where !mirror.isVisible {
-                mirror.orderFrontRegardless()
+            for (_, mirror) in mirrorPanels {
+                setPanelVisible(mirror, true)
             }
             return
         }
@@ -404,24 +423,30 @@ final class IslandController: ObservableObject {
         let activeScreen = targetScreenForActivePanel
         if let mainPanel {
             let isMainFullscreen = FullscreenDetector.isFullscreen(on: activeScreen)
-            if isMainFullscreen && mainPanel.isVisible {
-                collapse()
-                mainPanel.orderOut(nil)
-            } else if !isMainFullscreen && !mainPanel.isVisible {
-                mainPanel.orderFrontRegardless()
-            }
+            setPanelVisible(mainPanel, !isMainFullscreen)
         }
 
         let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
         if mode == "all" {
             for (id, mirror) in mirrorPanels {
                 let isMirrorFullscreen = FullscreenDetector.isFullscreen(on: id)
-                if isMirrorFullscreen && mirror.isVisible {
-                    mirror.orderOut(nil)
-                } else if !isMirrorFullscreen && !mirror.isVisible {
-                    mirror.orderFrontRegardless()
-                }
+                setPanelVisible(mirror, !isMirrorFullscreen)
             }
+        }
+    }
+
+    private func setPanelVisible(_ panel: IslandPanel, _ visible: Bool) {
+        if panel === mainPanel && !visible && panel.wantsVisible {
+            hoverWorkItem?.cancel()
+            hoverWorkItem = nil
+            collapseWorkItem?.cancel()
+            collapseWorkItem = nil
+            isPinnedOpen = false
+        }
+        panel.setVisible(visible) { [weak self, weak panel] in
+            guard let self, let panel, panel === self.mainPanel else { return }
+            // Reset expansion only after fading out, so the two animations do not compete.
+            self.collapse()
         }
     }
 
@@ -451,7 +476,7 @@ final class IslandController: ObservableObject {
 
     private func closeAllMirrors() {
         for (_, panel) in mirrorPanels {
-            panel.orderOut(nil)
+            panel.setVisible(false, animated: false)
         }
         mirrorPanels.removeAll()
     }
@@ -507,7 +532,7 @@ final class IslandController: ObservableObject {
     /// Kiểm tra chính xác tọa độ con trỏ chuột đã thực sự chạm vào phần hình vẽ (Pixel Silhouette)
     /// của Capsule hoặc Notch hay chưa, loại bỏ hoàn toàn vùng đệm thừa xung quanh vai tai thỏ và góc bo.
     func isPointInsideIsland(_ screenPoint: NSPoint) -> Bool {
-        guard let mainPanel, mainPanel.isVisible else { return false }
+        guard let mainPanel, mainPanel.wantsVisible, mainPanel.isVisible else { return false }
         let screen = mainPanel.screen ?? targetScreenForActivePanel
         let rect = activeScreenIslandRect
         guard rect.width > 0, rect.height > 0, rect.contains(screenPoint) else { return false }
@@ -598,7 +623,7 @@ final class IslandController: ObservableObject {
     }
 
     private func handleMouseEvent(type: NSEvent.EventType) {
-        guard SensePillar.dynamicIsland.isEnabled(), let mainPanel, mainPanel.isVisible else { return }
+        guard SensePillar.dynamicIsland.isEnabled(), let mainPanel, mainPanel.wantsVisible, mainPanel.isVisible else { return }
         let mouse = NSEvent.mouseLocation
         let currentScreen = mainPanel.screen ?? targetScreenForActivePanel
 
