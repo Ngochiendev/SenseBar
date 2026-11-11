@@ -12,7 +12,7 @@ extension Notification.Name {
 final class PetService: ObservableObject {
     static let shared = PetService()
 
-    @Published private(set) var isEnabled: Bool = true
+    @Published private(set) var isEnabled: Bool = false
     @Published private(set) var visitsEnabled: Bool = true
     @Published private(set) var look: PetLook = .standard
     @Published private(set) var side: PetSide = .left

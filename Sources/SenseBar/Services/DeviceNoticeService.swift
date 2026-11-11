@@ -1,4 +1,5 @@
 import AppKit
+import CoreBluetooth
 import Combine
 import IOKit.ps
 
@@ -170,18 +171,18 @@ final class DeviceNoticeService: ObservableObject {
             .merge(with: center.publisher(for: NSWorkspace.sessionDidBecomeActiveNotification))
             .receive(on: RunLoop.main).sink { [weak self] _ in
             self?.sleeping = false
-            self?.bluetooth?.setEnabled(self?.enabled == true)
+            self?.bluetooth?.setEnabled(self?.canMonitorBluetooth == true)
         }.store(in: &subscriptions)
         NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
             .receive(on: RunLoop.main).sink { [weak self] _ in
             guard let self else { return }
-            self.bluetooth?.setEnabled(self.enabled && !self.sleeping)
+            self.bluetooth?.setEnabled(self.canMonitorBluetooth && !self.sleeping)
             if !self.enabled { self.pending.removeAll(); self.devices.removeAll(); self.dismissCurrent() }
         }.store(in: &subscriptions)
         bluetooth = DeviceConnectionMonitor { [weak self] event in
             Task { @MainActor in self?.receive(event) }
         }
-        bluetooth?.setEnabled(enabled)
+        bluetooth?.setEnabled(canMonitorBluetooth)
         AudioStudioService.shared.$outputDevices
             .combineLatest(AudioStudioService.shared.$selectedOutputID)
             .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
@@ -203,11 +204,14 @@ final class DeviceNoticeService: ObservableObject {
             }.store(in: &subscriptions)
     }
 
+    private var canMonitorBluetooth: Bool {
+        enabled && CBManager.authorization == .allowedAlways
+    }
+
     private var enabled: Bool {
         SensePillar.dynamicIsland.isEnabled()
-            // Device discovery is privacy-sensitive: do not touch IOBluetooth until
-            // the person explicitly enables device notices in Settings.
-            && (UserDefaults.standard.object(forKey: DefaultsKey.notchDeviceNotices) as? Bool ?? false)
+            // Hoàn tất onboarding và giữ tùy chọn bật mới bắt đầu nhận diện phụ kiện.
+            && (UserDefaults.standard.object(forKey: DefaultsKey.notchDeviceNotices) as? Bool ?? true)
     }
 
     private func receive(_ event: DeviceConnectionEvent) {

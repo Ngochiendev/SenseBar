@@ -131,13 +131,16 @@ final class IslandController: ObservableObject {
     }
 
     private func registerDefaultPreferences() {
-        UserDefaults.standard.register(defaults: [
+        let defaults = UserDefaults.standard
+        defaults.register(defaults: [
             DefaultsKey.notchStyle: "notch",
             DefaultsKey.notchExpandOnHover: true,
             DefaultsKey.notchShowVisualizer: true,
             DefaultsKey.notchHideInFullscreen: true,
             DefaultsKey.notchDisplayTarget: "automatic",
             DefaultsKey.notchExpandAllDisplays: false,
+            DefaultsKey.notchDeviceNotices: true,
+            DefaultsKey.notchLowPeripheralBattery: true,
             DefaultsKey.pillarDynamicIslandEnabled: true,
             DefaultsKey.pillarAudioStudioEnabled: true,
             DefaultsKey.liquidGlassEnabled: true,

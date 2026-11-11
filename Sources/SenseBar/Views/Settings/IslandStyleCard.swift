@@ -5,9 +5,10 @@ import SwiftUI
 struct IslandStyleCard: View {
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var islandController = IslandController.shared
+    @ObservedObject private var permissions = PermissionManager.shared
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
-    @AppStorage(DefaultsKey.notchDeviceNotices) private var deviceNotices = false
-    @AppStorage(DefaultsKey.notchLowPeripheralBattery) private var lowBattery = false
+    @AppStorage(DefaultsKey.notchDeviceNotices) private var deviceNotices = true
+    @AppStorage(DefaultsKey.notchLowPeripheralBattery) private var lowBattery = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -23,14 +24,21 @@ struct IslandStyleCard: View {
             if islandController.hasNotchedDisplay {
                 notchedDisplayNote
             }
+            VStack(alignment: .leading, spacing: 8) {
+                Label(l10n.string(vi: "Thông báo phụ kiện", en: "Accessory alerts"), systemImage: "airpodspro")
+                    .font(.system(size: 11, weight: .bold))
+                DeviceAlertsIllustration(enabled: deviceNotices)
+                    .frame(height: 68)
+            }
+            .padding(.top, 2)
             VStack(spacing: 0) {
                 noticeToggle(
                     l10n.string(vi: "Thông báo sạc & kết nối thiết bị", en: "Power & device connection alerts"),
                     detail: l10n.string(
-                        vi: "Lần bật đầu có thể yêu cầu quyền Bluetooth để nhận diện phụ kiện.",
-                        en: "The first use may request Bluetooth access to identify accessories."
+                        vi: "Nhận diện phụ kiện khi bạn cấp quyền Bluetooth.",
+                        en: "Identify accessories after you allow Bluetooth access."
                     ),
-                    isOn: $deviceNotices
+                    isOn: deviceNoticesBinding
                 )
                 Divider().opacity(0.35)
                 noticeToggle(
@@ -38,6 +46,18 @@ struct IslandStyleCard: View {
                     isOn: $lowBattery
                 )
                     .disabled(!deviceNotices)
+                    .opacity(deviceNotices ? 1 : 0.48)
+            }
+            .padding(.horizontal, 10)
+            .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            if deviceNotices && !permissions.bluetoothGranted {
+                Button {
+                    permissions.requestBluetooth()
+                } label: {
+                    Label(l10n.string(vi: "Cho phép Bluetooth để nhận diện phụ kiện", en: "Allow Bluetooth to identify accessories"), systemImage: "hand.raised")
+                        .font(.system(size: 10.5))
+                }
+                .buttonStyle(.bordered).controlSize(.small)
             }
             HStack {
                 Spacer()
@@ -55,6 +75,13 @@ struct IslandStyleCard: View {
             }
         }
         .panelCard()
+    }
+
+    private var deviceNoticesBinding: Binding<Bool> {
+        Binding(get: { deviceNotices }, set: { enabled in
+            deviceNotices = enabled
+            if !enabled { lowBattery = false }
+        })
     }
 
     private func noticeToggle(_ title: String, detail: String? = nil, isOn: Binding<Bool>) -> some View {

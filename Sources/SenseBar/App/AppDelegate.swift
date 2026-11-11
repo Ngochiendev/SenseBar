@@ -119,19 +119,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let rootView = WelcomeOnboardingView { [weak self] in
-            self?.finishOnboardingAndOpenPopover()
+            self?.finishOnboarding()
         }
         let hostingController = NSHostingController(rootView: rootView)
 
         let window = NSWindow(contentViewController: hostingController)
         window.title = AppInfo.name
         window.titleVisibility = .hidden
-        window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        window.styleMask = [.titled, .closable, .miniaturizable]
         window.titlebarAppearsTransparent = true
+        window.isOpaque = true
+        window.backgroundColor = .textBackgroundColor
+        window.hasShadow = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.setContentSize(NSSize(width: 560, height: 640))
+        window.setContentSize(NSSize(width: 820, height: 720))
         window.center()
 
         welcomeWindow = window
@@ -142,15 +145,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func finishOnboardingAndOpenPopover() {
+    private func finishOnboarding() {
         guard PermissionManager.shared.accessibilityGranted else { return }
         IslandController.shared.start()
         IslandController.shared.syncVisibility()
         AudioStudioService.shared.refreshAll()
         welcomeWindow?.close()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            self?.menuBarController?.showPopover()
-        }
     }
 
     // MARK: - Quản lý Cửa sổ & Giải phóng Bộ nhớ khi đóng
