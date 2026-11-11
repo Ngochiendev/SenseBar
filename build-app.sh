@@ -89,12 +89,12 @@ if [[ "$SIGN_IDENTITY" == "-" ]]; then
   echo "▸ Signing SenseBar.app (Ad-hoc signature)..."
   codesign --force -s - "build/libSenseBarNowPlaying.dylib"
   codesign --force -s - "$STAGE/Contents/Frameworks/libSenseBarNowPlaying.dylib"
-  codesign --force -s - "$STAGE"
+  codesign --force --entitlements Resources/SenseBar.entitlements -s - "$STAGE"
 else
   echo "▸ Signing SenseBar.app with Developer Certificate..."
   codesign --force --options runtime --timestamp -s "$SIGN_IDENTITY" "build/libSenseBarNowPlaying.dylib"
   codesign --force --options runtime --timestamp -s "$SIGN_IDENTITY" "$STAGE/Contents/Frameworks/libSenseBarNowPlaying.dylib"
-  codesign --force --options runtime --timestamp -s "$SIGN_IDENTITY" "$STAGE"
+  codesign --force --options runtime --timestamp --entitlements Resources/SenseBar.entitlements -s "$SIGN_IDENTITY" "$STAGE"
 fi
 
 echo "✓ SenseBar.app is ready at $STAGE"

@@ -6,6 +6,13 @@ MainActor.assumeIsolated {
         precondition(MusicService.cleanMediaTitle("TỔNG HỢP NHẠC DRILL - YouTube") == "TỔNG HỢP NHẠC DRILL")
         precondition(MusicService.cleanMediaTitle("(1) Bài hát mới – YouTube") == "Bài hát mới")
         precondition(MusicService.cleanMediaTitle("Song - YouTube remix") == "Song - YouTube remix")
+        precondition(BrowserArtworkService.videoID(from: URL(string: "https://www.youtube.com/watch?v=dQw4w9WgXcQ")!) == "dQw4w9WgXcQ")
+        precondition(BrowserArtworkService.videoID(from: URL(string: "https://example.com/watch?v=dQw4w9WgXcQ")!) == nil)
+        let sessionBlock = Data([0x6d, 0x6f, 0x7a, 0x4c, 0x7a, 0x34, 0x30, 0, 2, 0, 0, 0, 0x20, 0x7b, 0x7d])
+        precondition(BrowserArtworkService.decodeSession(sessionBlock) == Data("{}".utf8),
+                     "Mozilla session must decode the size-prefixed raw LZ4 block")
+        precondition(BrowserArtworkService.decodeSession(sessionBlock.dropLast()) == nil,
+                     "Truncated sessions must not produce partial metadata")
         precondition(MusicService.validatePlaybackParser(), "MusicService parser must cleanly parse playback sessions")
         let menuIcon = BrandIconResources.menuBarTemplateImage()
         assert(menuIcon.isTemplate, "MenuBarIcon must be a template image")
@@ -77,6 +84,15 @@ MainActor.assumeIsolated {
             appName: "Spotify", pid: 456, isPlaying: false, browsers: [chrome], preferredSource: "com.spotify.client")
         precondition(pinnedSpotify?.bundleID == "com.spotify.client" && pinnedSpotify?.isPlaying == false
                      && pinnedSpotify?.usesRemoteMetadata == true, "A pinned paused song must retain its metadata")
+        let qobuz = AudioOutputActivity(bundleID: "com.qobuz.desktop", appName: "Qobuz", pid: 789)
+        let pinnedAudioOnly = MediaPlaybackPolicy.resolve(title: "", bundleID: "", appName: "", pid: 0,
+            isPlaying: false, browsers: [], audioOutputs: [qobuz], preferredSource: qobuz.bundleID)
+        precondition(pinnedAudioOnly?.title == "Qobuz" && pinnedAudioOnly?.usesRemoteMetadata == false,
+                     "A pinned audio-only app must expose only its application identity")
+        let ambiguousAudio = MediaPlaybackPolicy.resolve(title: "", bundleID: "", appName: "", pid: 0,
+            isPlaying: false, browsers: [], audioOutputs: [qobuz,
+                AudioOutputActivity(bundleID: "io.mpv", appName: "mpv", pid: 790)])
+        precondition(ambiguousAudio == nil, "Automatic selection must not guess between audio-only apps")
         precondition(MediaPlaybackPolicy.resolve(title: "", bundleID: "", appName: "", pid: 0,
             isPlaying: false, browsers: []) == nil, "Closed players must not leave a phantom track")
         let spotify = MediaPlaybackPolicy.resolve(title: "Song B", bundleID: "com.spotify.client",

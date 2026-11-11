@@ -148,10 +148,16 @@ public func sensebarNowPlayingGet() {
 
     let isPlaying = (snapshot["isPlaying"] as? Bool) ?? (((snapshot["rate"] as? Double) ?? 0) > 0)
     snapshot["isPlaying"] = isPlaying
+    // A selected browser may advertise commands while another app owns the
+    // system route. Keep those facts separate for app-scoped delivery.
+    snapshot["playerSupportsNext"] = currentCommands?.contains(4) == true
+    snapshot["playerSupportsPrevious"] = currentCommands?.contains(5) == true
     if let context = MediaSessionCoordinator.shared.present(target, fields: currentRecording) {
         snapshot["playbackRevision"] = context.revision.uuidString
         snapshot["controlPID"] = context.pid
-        let owned = target?.ownsSystemSession == true
+        // Discovery and metadata callbacks can straddle a pause/handoff.
+        // Publish capabilities using ownership at the end of this read.
+        let owned = target.map { $0.alive && MediaRemoteIO.discover(includeClients: false).current == $0.owner.pid } == true
         snapshot["supportsTransportControls"] = owned && (currentCommands == nil
             || currentCommands?.contains(isPlaying ? 1 : 0) == true || currentCommands?.contains(2) == true)
         snapshot["supportsNext"] = owned && currentCommands?.contains(4) == true
@@ -177,7 +183,9 @@ public func sensebarNowPlayingGet() {
     previousSource = source
     previousTitle = title
     previousArtist = artist
-    snapshot["runningOutputBrowsers"] = BrowserAudioSnapshot.read()
+    let audioOutput = BrowserAudioSnapshot.read()
+    snapshot["runningOutputBrowsers"] = audioOutput.browsers
+    snapshot["runningOutputApplications"] = audioOutput.applications
     snapshot["availableSources"] = coordinator.availableSources
     snapshot["preferredSource"] = coordinator.preferredBundleID
 

@@ -7,6 +7,7 @@ struct MediaSourceItem: Equatable, Identifiable {
     let bundleID: String
     let appName: String
     let isPlaying: Bool
+    var isAudioOnly = false
 }
 
 struct NowPlayingTrack: Equatable {
@@ -25,6 +26,9 @@ struct NowPlayingTrack: Equatable {
     var supportsSeeking = false
     var playbackRevision: String?
     var controlPID: Int?
+    var selectedPlayerCommands: Set<String> = []
+    var playerSupportsNext = false
+    var playerSupportsPrevious = false
 
     var progress: Double {
         guard duration > 0 else { return 0 }
@@ -53,6 +57,8 @@ final class MusicService: ObservableObject {
     @Published private(set) var accentColor: Color = Color(red: 0.98, green: 0.58, blue: 0.12)
     @Published private(set) var availableSources: [MediaSourceItem] = []
     @Published private(set) var preferredSource: String = "auto"
+    @Published private(set) var isControlPending = false
+    @Published private(set) var controlError: String?
     var sourceDisplayName: String {
         if let track { return track.appName }
         guard preferredSource != "auto" else { return L10n.shared.string(vi: "Nhạc", en: "Now Playing") }
@@ -62,7 +68,7 @@ final class MusicService: ObservableObject {
         }
         return preferredSource
     }
-    var hasMediaPresentation: Bool { track?.isPlaying == true }
+    var hasMediaPresentation: Bool { track != nil }
 
     private var process: Process?
     private var inputPipe: Pipe?
@@ -72,6 +78,14 @@ final class MusicService: ObservableObject {
     private var shouldRun = false
     private var cachedRemoteArtwork: NSImage?
     private var cachedRemoteAccent: Color?
+    private let browserArtwork = BrowserArtworkService()
+    private let selectedPlayerControl = SelectedPlayerControl()
+    private var selectedControlTarget: SelectedPlayerTarget?
+    private var selectedControlCapabilities = SelectedPlayerCapabilities()
+    private var nativeControlCapabilities = SelectedPlayerCapabilities()
+    private var selectedControlScan: Task<Void, Never>?
+    private var selectedControlAction: Task<Void, Never>?
+    private var controlGeneration = UUID()
     private var rawBuffer = Data()
     private var bridgeGeneration = UUID()
     private let workerQueue = DispatchQueue(label: "com.ngochiendev.sensebar.music-service", qos: .utility)
@@ -163,6 +177,7 @@ final class MusicService: ObservableObject {
     }
 
     func stop() {
+        resetSelectedPlayerControl()
         bridgeGeneration = UUID()
         rawBuffer.removeAll(keepingCapacity: false)
         stopElapsedTicker()
@@ -175,6 +190,7 @@ final class MusicService: ObservableObject {
         outputPipe = nil
         cachedRemoteArtwork = nil
         cachedRemoteAccent = nil
+        browserArtwork.cancel()
         track = nil
         artwork = nil
         availableSources = []
@@ -206,7 +222,7 @@ final class MusicService: ObservableObject {
         apply(title: "Song A", artist: "Artist A", playing: true)
         guard service.track?.title == "Song A", service.track?.artist == "Artist A", service.hasMediaPresentation else { return false }
         apply(title: "Song A", artist: "Artist A", playing: false)
-        guard service.track?.isPlaying == false, !service.hasMediaPresentation,
+        guard service.track?.isPlaying == false, service.hasMediaPresentation,
               service.track?.supportsTransportControls == false else { return false }
         let revision = UUID().uuidString
         let valid: [String: Any] = ["title": "Song A", "bundleID": "com.spotify.client", "pid": 100,
@@ -229,14 +245,40 @@ final class MusicService: ObservableObject {
         guard let staleData = try? JSONSerialization.data(withJSONObject: stale) else { return false }
         service.parseJSONLine(staleData)
         guard service.track == nil else { return false }
-        let pausedChrome: [String: Any] = ["title": "YouTube video", "bundleID": "com.google.Chrome", "pid": 200,
-            "isPlaying": false, "preferredSource": "com.google.Chrome", "supportsTransportControls": true,
-            "controlPID": 200, "playbackRevision": UUID().uuidString,
-            "runningOutputBrowsers": [["bundleID": "com.google.Chrome", "appName": "Google Chrome", "pid": 200]]]
-        guard let pausedData = try? JSONSerialization.data(withJSONObject: pausedChrome) else { return false }
-        service.parseJSONLine(pausedData)
-        guard service.track?.title == "YouTube video", service.track?.isPlaying == false,
-              service.track?.supportsTransportControls == true else { return false }
+        // Transport and paused presentation depend on the session, not an app allowlist.
+        for bundle in ["com.google.Chrome", "org.mozilla.firefox", "app.zen-browser.zen",
+                       "com.apple.Safari", "com.brave.Browser", "com.spotify.client",
+                       "com.apple.Music", "test.other-player"] {
+            for selection in ["auto", bundle] {
+                service.preferredSource = selection
+                let ticket = UUID().uuidString
+                for playing in [true, false, true] {
+                    let fields: [String: Any] = ["title": "Test recording", "artist": "Test artist",
+                        "bundleID": bundle, "pid": 200, "duration": 180, "elapsed": 60,
+                        "isPlaying": playing, "preferredSource": selection,
+                        "supportsTransportControls": true, "supportsNext": true,
+                        "supportsPrevious": false, "supportsSeeking": true,
+                        "controlPID": 200, "playbackRevision": ticket]
+                    guard let payload = try? JSONSerialization.data(withJSONObject: fields) else { return false }
+                    service.parseJSONLine(payload)
+                    guard let track = service.track, service.hasMediaPresentation,
+                          track.bundleID == bundle, track.isPlaying == playing,
+                          track.supportsTransportControls, track.supportsNext,
+                          !track.supportsPrevious, track.supportsSeeking,
+                          track.playbackRevision == ticket, track.elapsed == 60 else { return false }
+                }
+            }
+        }
+        service.preferredSource = "auto"
+        var skipOnly = valid
+        skipOnly["supportsTransportControls"] = false
+        skipOnly["supportsNext"] = true
+        skipOnly["supportsPrevious"] = true
+        skipOnly["supportsSeeking"] = true
+        guard let skipData = try? JSONSerialization.data(withJSONObject: skipOnly) else { return false }
+        service.parseJSONLine(skipData)
+        guard service.track?.supportsTransportControls == false, service.track?.supportsNext == true,
+              service.track?.supportsPrevious == true, service.track?.supportsSeeking == true else { return false }
         service.stop()
         return service.track == nil && service.artwork == nil
     }
@@ -249,11 +291,13 @@ final class MusicService: ObservableObject {
     /// Chọn nguồn phát cụ thể (hoặc "auto" để tự động nhận diện)
     func selectSource(_ bundleID: String) {
         guard preferredSource != bundleID else { return }
+        resetSelectedPlayerControl()
         preferredSource = bundleID
         track = nil
         artwork = nil
         cachedRemoteArtwork = nil
         cachedRemoteAccent = nil
+        browserArtwork.cancel()
         stopElapsedTicker()
         UserDefaults.standard.set(bundleID, forKey: "SenseBarMediaPreferredSource")
         sendPreferredSourceCommand(bundleID)
@@ -307,8 +351,36 @@ final class MusicService: ObservableObject {
     }
 
     private func sendCommand(_ command: String, position: Double? = nil) {
-        guard let pipe = inputPipe, let track, track.supportsTransportControls,
+        guard !isControlPending else { return }
+        if let track, track.selectedPlayerCommands.contains(command), command != "seek",
+           let target = selectedControlTarget, SelectedPlayerTarget(track) == target {
+            let generation = controlGeneration
+            isControlPending = true
+            controlError = nil
+            selectedControlAction = Task { [weak self, selectedPlayerControl] in
+                let accepted = await selectedPlayerControl.perform(command, target: target)
+                guard !Task.isCancelled, let self, self.controlGeneration == generation else { return }
+                self.selectedControlAction = nil
+                self.isControlPending = false
+                if !accepted {
+                    self.controlError = L10n.shared.string(vi: "Không điều khiển được nguồn đã chọn. Mở ứng dụng và thử lại.",
+                        en: "Couldn't control the selected source. Open the app and try again.")
+                }
+                self.refreshNowPlaying()
+            }
+            return
+        }
+        guard let pipe = inputPipe, let track,
               let revision = track.playbackRevision, let controlPID = track.controlPID else { return }
+        let supported: Bool
+        switch command {
+        case "play", "pause": supported = track.supportsTransportControls
+        case "next": supported = track.supportsNext
+        case "previous": supported = track.supportsPrevious
+        case "seek": supported = track.supportsSeeking
+        default: supported = false
+        }
+        guard supported else { return }
         var dict: [String: Any] = ["command": command, "playbackRevision": revision, "controlPID": controlPID]
         if let position { dict["position"] = position }
         guard let json = try? JSONSerialization.data(withJSONObject: dict),
@@ -319,6 +391,57 @@ final class MusicService: ObservableObject {
     }
 
     // MARK: - Internal Engine
+
+    private func resetSelectedPlayerControl() {
+        controlGeneration = UUID()
+        selectedControlScan?.cancel()
+        selectedControlAction?.cancel()
+        selectedControlScan = nil
+        selectedControlAction = nil
+        selectedControlTarget = nil
+        selectedControlCapabilities = SelectedPlayerCapabilities()
+        isControlPending = false
+        controlError = nil
+    }
+
+    private func applySelectedCapabilities() {
+        guard var current = track, let target = selectedControlTarget,
+              SelectedPlayerTarget(current) == target else { return }
+        let capabilities = selectedControlCapabilities
+        current.supportsTransportControls = nativeControlCapabilities.play || nativeControlCapabilities.pause
+            || (current.isPlaying ? capabilities.pause : capabilities.play)
+        current.supportsNext = nativeControlCapabilities.next || capabilities.next
+        current.supportsPrevious = nativeControlCapabilities.previous || capabilities.previous
+        current.selectedPlayerCommands = Set([
+            capabilities.play ? "play" : nil, capabilities.pause ? "pause" : nil,
+            capabilities.next ? "next" : nil, capabilities.previous ? "previous" : nil
+        ].compactMap { $0 })
+        track = current
+    }
+
+    private func discoverSelectedPlayerControl(remoteMetadata: Bool) {
+        guard shouldRun, remoteMetadata, let current = track,
+              !(current.supportsTransportControls && current.supportsNext && current.supportsPrevious),
+              let target = SelectedPlayerTarget(current) else {
+            resetSelectedPlayerControl()
+            return
+        }
+        if target != selectedControlTarget {
+            resetSelectedPlayerControl()
+            selectedControlTarget = target
+        }
+        applySelectedCapabilities()
+        guard selectedControlScan == nil else { return }
+        let generation = controlGeneration
+        selectedControlScan = Task { [weak self, selectedPlayerControl] in
+            let capabilities = await selectedPlayerControl.capabilities(for: target)
+            guard !Task.isCancelled, let self, self.controlGeneration == generation,
+                  self.selectedControlTarget == target else { return }
+            self.selectedControlScan = nil
+            self.selectedControlCapabilities = capabilities
+            self.applySelectedCapabilities()
+        }
+    }
 
     private func startElapsedTickerIfNeeded() {
         guard tickTimer == nil else { return }
@@ -369,9 +492,15 @@ final class MusicService: ObservableObject {
                       let name = item["appName"] as? String else { return nil }
                 return MediaSourceItem(bundleID: bundle, appName: name, isPlaying: item["isPlaying"] as? Bool == true)
             }
-            if parsedSources != self.availableSources {
-                self.availableSources = parsedSources
+            var merged = parsedSources
+            for item in json["runningOutputApplications"] as? [[String: Any]] ?? [] {
+                guard let bundle = item["bundleID"] as? String, let name = item["appName"] as? String,
+                      !Self.isBrowserBundle(bundle),
+                      !merged.contains(where: { $0.bundleID.caseInsensitiveCompare(bundle) == .orderedSame }) else { continue }
+                merged.append(MediaSourceItem(bundleID: bundle, appName: name, isPlaying: true, isAudioOnly: true))
             }
+            merged.sort { $0.appName.localizedCaseInsensitiveCompare($1.appName) == .orderedAscending }
+            if merged != self.availableSources { self.availableSources = merged }
         }
 
         let rawTitle = Self.cleanMediaTitle(json["title"] as? String ?? "")
@@ -411,9 +540,17 @@ final class MusicService: ObservableObject {
                   let pid = item["pid"] as? Int else { return nil }
             return BrowserPlaybackActivity(bundleID: bundle, appName: name, pid: pid)
         }
+        let audioOutputs = (json["runningOutputApplications"] as? [[String: Any]] ?? []).compactMap { item -> AudioOutputActivity? in
+            guard let bundle = item["bundleID"] as? String, let name = item["appName"] as? String,
+                  let pid = item["pid"] as? Int, !Self.isBrowserBundle(bundle) else { return nil }
+            return AudioOutputActivity(bundleID: bundle, appName: name, pid: pid)
+        }
         guard let resolution = MediaPlaybackPolicy.resolve(title: isBrowserHomepage ? "" : rawTitle,
-            bundleID: bundleID, appName: appName, pid: pid, isPlaying: isPlaying, browsers: browsers, preferredSource: preferredSource) else {
+            bundleID: bundleID, appName: appName, pid: pid, isPlaying: isPlaying, browsers: browsers,
+            audioOutputs: audioOutputs, preferredSource: preferredSource) else {
             self.track = nil
+            resetSelectedPlayerControl()
+            browserArtwork.cancel()
             self.artwork = nil
             self.stopElapsedTicker()
             return
@@ -421,8 +558,8 @@ final class MusicService: ObservableObject {
 
         let revision = (json["playbackRevision"] as? String).flatMap(UUID.init(uuidString:))
         let controlPID = json["controlPID"] as? Int
-        let canControl = resolution.usesRemoteMetadata && json["supportsTransportControls"] as? Bool == true
-            && revision != nil && (controlPID ?? 0) > 0
+        let hasTicket = resolution.usesRemoteMetadata && revision != nil && (controlPID ?? 0) > 0
+        let canControl = hasTicket && json["supportsTransportControls"] as? Bool == true
         let parsedTrack = NowPlayingTrack(
             title: resolution.title,
             artist: resolution.usesRemoteMetadata ? artist : "",
@@ -434,26 +571,61 @@ final class MusicService: ObservableObject {
             bundleID: resolution.bundleID,
             pid: resolution.pid,
             supportsTransportControls: canControl,
-            supportsNext: canControl && json["supportsNext"] as? Bool == true,
-            supportsPrevious: canControl && json["supportsPrevious"] as? Bool == true,
-            supportsSeeking: canControl && json["supportsSeeking"] as? Bool == true,
+            supportsNext: hasTicket && json["supportsNext"] as? Bool == true,
+            supportsPrevious: hasTicket && json["supportsPrevious"] as? Bool == true,
+            supportsSeeking: hasTicket && json["supportsSeeking"] as? Bool == true,
             playbackRevision: revision?.uuidString,
-            controlPID: controlPID
+            controlPID: controlPID,
+            playerSupportsNext: json["playerSupportsNext"] as? Bool == true,
+            playerSupportsPrevious: json["playerSupportsPrevious"] as? Bool == true
         )
+        nativeControlCapabilities = SelectedPlayerCapabilities(play: parsedTrack.supportsTransportControls,
+            pause: parsedTrack.supportsTransportControls, next: parsedTrack.supportsNext, previous: parsedTrack.supportsPrevious)
         self.lastSampleDate = Date()
         self.track = parsedTrack
+        discoverSelectedPlayerControl(remoteMetadata: resolution.usesRemoteMetadata)
         if parsedTrack.isPlaying && parsedTrack.duration > 0 {
             self.startElapsedTickerIfNeeded()
         } else {
             self.stopElapsedTicker()
         }
         if !resolution.usesRemoteMetadata {
-            self.artwork = NSRunningApplication(processIdentifier: pid_t(resolution.pid))?.icon
+            browserArtwork.cancel()
+            self.artwork = Self.applicationIcon(bundleID: resolution.bundleID, pid: resolution.pid)
             self.accentColor = Color(red: 0.38, green: 0.64, blue: 1.0)
         } else {
-            self.artwork = cachedRemoteArtwork
+            let icon = Self.applicationIcon(bundleID: resolution.bundleID, pid: resolution.pid)
+            let fallbackEnabled = BrowserArtworkService.supports(parsedTrack.bundleID)
+            self.artwork = (fallbackEnabled && BrowserArtworkService.needsCover(cachedRemoteArtwork)
+                ? browserArtwork.cached(title: parsedTrack.title, artist: parsedTrack.artist, bundleID: parsedTrack.bundleID) : nil)
+                ?? cachedRemoteArtwork ?? icon
             self.accentColor = cachedRemoteAccent ?? Color(red: 0.38, green: 0.64, blue: 1.0)
+            if BrowserArtworkService.needsCover(cachedRemoteArtwork), fallbackEnabled {
+                browserArtwork.load(title: parsedTrack.title, artist: parsedTrack.artist, bundleID: parsedTrack.bundleID) { [weak self] image in
+                    guard let self, self.track?.bundleID == parsedTrack.bundleID,
+                          self.track?.title == parsedTrack.title, self.track?.artist == parsedTrack.artist,
+                          BrowserArtworkService.needsCover(self.cachedRemoteArtwork) else { return }
+                    self.artwork = image ?? self.cachedRemoteArtwork ?? icon
+                    if let image { self.accentColor = Self.extractAccentColor(from: image) }
+                }
+            } else {
+                browserArtwork.cancel()
+            }
         }
+    }
+
+    private static func applicationIcon(bundleID: String, pid: Int) -> NSImage? {
+        if pid > 0, let icon = NSRunningApplication(processIdentifier: pid_t(pid))?.icon { return icon }
+        guard !bundleID.isEmpty,
+              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        return NSWorkspace.shared.icon(forFile: url.path)
+    }
+
+    private static func isBrowserBundle(_ bundleID: String) -> Bool {
+        let id = bundleID.lowercased()
+        return id.contains("chrome") || id.contains("safari") || id.contains("firefox")
+            || id.contains("zen-browser") || id.contains("brave") || id.contains("edgemac")
+            || id.contains("vivaldi") || id.contains("operasoftware") || id.contains("thebrowser")
     }
 
     private static func friendlyAppName(for bundleID: String) -> String {

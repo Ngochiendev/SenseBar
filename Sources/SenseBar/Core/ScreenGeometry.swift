@@ -56,7 +56,7 @@ public struct ScreenGeometry: Equatable {
         return max(0, ((menuBarHeight - capsuleHeight) / 2).rounded(.down))
     }
 
-    /// Kích thước viên nang chuẩn trong Menu Bar (Học hỏi tỉ lệ vàng của vorssaint).
+    /// Kích thước viên nang chuẩn trong Menu Bar
     /// - Parameters:
     ///   - customWidth: Độ tinh chỉnh chiều rộng (px).
     ///   - customHeight: Độ tinh chỉnh chiều cao (px).

@@ -346,7 +346,7 @@ struct IslandView: View {
             }()
 
             ZStack {
-                if let playingTrack = music.track, playingTrack.isPlaying, !pet.hasActivePresentation {
+                if let playingTrack = music.track, !pet.hasActivePresentation {
                     let coverSize: CGFloat = max(14, size.height - 6)
                     HStack(spacing: 8) {
                         AlbumArtView(artwork: music.artwork, size: coverSize, isCircle: true)
@@ -404,7 +404,7 @@ struct IslandView: View {
             )
 
             ZStack {
-                if let playingTrack = music.track, playingTrack.isPlaying, !pet.hasActivePresentation {
+                if let playingTrack = music.track, !pet.hasActivePresentation {
                     HStack(spacing: 0) {
                         HStack(spacing: 0) {
                             AlbumArtView(artwork: music.artwork, size: 20, cornerRadius: 5.5)
@@ -558,9 +558,11 @@ struct IslandView: View {
                                 controller.expand(Pinned: true)
                             } label: {
                                 HStack {
-                                    Text(source.appName + (source.isPlaying
-                                        ? l10n.string(vi: " · Đang phát", en: " · Playing")
-                                        : l10n.string(vi: " · Đã tạm dừng", en: " · Paused")))
+                                    Text(source.appName + (source.isAudioOnly
+                                        ? l10n.string(vi: " · Chỉ âm thanh", en: " · Audio only")
+                                        : source.isPlaying
+                                            ? l10n.string(vi: " · Đang phát", en: " · Playing")
+                                            : l10n.string(vi: " · Đã tạm dừng", en: " · Paused")))
                                     if music.preferredSource == source.bundleID {
                                         Image(systemName: "checkmark")
                                     }
@@ -696,7 +698,7 @@ struct IslandView: View {
                         music.openPlayerApp()
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "arrow.up.forward.app.fill")
+                            Image(systemName: music.controlError == nil ? "arrow.up.forward.app.fill" : "exclamationmark.triangle.fill")
                                 .font(.system(size: 10.5))
                             Text(track.supportsTransportControls
                                  ? l10n.string(vi: "Mở App", en: "Open App")
@@ -709,6 +711,7 @@ struct IslandView: View {
                         .background(Capsule().fill(Color.white.opacity(0.10)))
                     }
                     .buttonStyle(.plain)
+                    .help(music.controlError ?? l10n.string(vi: "Mở ứng dụng đã chọn", en: "Open the selected app"))
 
                     Spacer()
 
@@ -721,7 +724,7 @@ struct IslandView: View {
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
-                    .disabled(!track.supportsPrevious)
+                    .disabled(!track.supportsPrevious || music.isControlPending)
                     .opacity(track.supportsPrevious ? 1 : 0.35)
 
                     Button {
@@ -734,11 +737,18 @@ struct IslandView: View {
                             .background(Circle().fill(Color.white))
                     }
                     .buttonStyle(.plain)
-                    .disabled(!track.supportsTransportControls)
+                    .overlay {
+                        if music.isControlPending {
+                            ProgressView().controlSize(.mini)
+                                .frame(width: 32, height: 32)
+                                .background(Circle().fill(Color.white))
+                        }
+                    }
+                    .disabled(!track.supportsTransportControls || music.isControlPending)
                     .opacity(track.supportsTransportControls ? 1 : 0.35)
-                    .help(track.supportsTransportControls
+                    .help(music.controlError ?? (track.supportsTransportControls
                         ? l10n.string(vi: "Phát / Tạm dừng", en: "Play / Pause")
-                        : l10n.string(vi: "Mở ứng dụng để tiếp tục phát nguồn này.", en: "Open the app to resume this source."))
+                        : l10n.string(vi: "Mở ứng dụng để tiếp tục phát nguồn này.", en: "Open the app to resume this source.")))
 
                     Button {
                         music.nextTrack()
@@ -749,7 +759,7 @@ struct IslandView: View {
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
-                    .disabled(!track.supportsNext)
+                    .disabled(!track.supportsNext || music.isControlPending)
                     .opacity(track.supportsNext ? 1 : 0.35)
 
                     Spacer()
