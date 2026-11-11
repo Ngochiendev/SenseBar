@@ -48,7 +48,9 @@ final class AudioStudioService: ObservableObject {
   private var appVolumes: [String: Double]
   private var lastAudibleVolumes: [String: Double] = [:]
   private var engines: [String: AudioTapEngine] = [:]
-  private var engineBuilds = Set<String>()
+  private var engineBuilds = AudioTapBuilds()
+  private var sleeping = false
+  private var featureEnabled = SensePillar.audioStudio.isEnabled()
   private var refreshTimer: Timer?
   private var workspaceObservers: [NSObjectProtocol] = []
   private var monitoringCount = 0
@@ -75,6 +77,30 @@ final class AudioStudioService: ObservableObject {
           MainActor.assumeIsolated { self?.refreshAll() }
         })
     }
+    workspaceObservers.append(center.addObserver(forName: NSWorkspace.willSleepNotification,
+                                                 object: nil, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.sleeping = true
+        self?.stopAllEngines()
+      }
+    })
+    workspaceObservers.append(center.addObserver(forName: NSWorkspace.didWakeNotification,
+                                                 object: nil, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.sleeping = false
+        self?.refreshAll()
+      }
+    })
+    workspaceObservers.append(NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
+                                                                    object: nil, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        let enabled = SensePillar.audioStudio.isEnabled()
+        guard enabled != self.featureEnabled else { return }
+        self.featureEnabled = enabled
+        self.refreshAll()
+      }
+    })
     refreshAll()
     listen(
       object: AudioObjectID(kAudioObjectSystemObject),
@@ -105,7 +131,7 @@ final class AudioStudioService: ObservableObject {
   }
 
   func refreshAll() {
-    guard SensePillar.audioStudio.isEnabled() else {
+    guard SensePillar.audioStudio.isEnabled(), !sleeping else {
       stopAllEngines()
       return
     }
@@ -114,11 +140,12 @@ final class AudioStudioService: ObservableObject {
       return
     }
     refreshInFlight = true
+    let revision = engineBuilds.revision
     Task {
       let snapshot = await Task.detached(priority: .utility) {
-        Self.readSnapshot(includeApps: true)
+        Self.readSnapshot()
       }.value
-      apply(snapshot)
+      if engineBuilds.revision == revision, !sleeping { apply(snapshot) }
       refreshInFlight = false
       if refreshPending {
         refreshPending = false
@@ -200,7 +227,7 @@ final class AudioStudioService: ObservableObject {
   }
 
   private func apply(_ snapshot: AudioSnapshot) {
-    guard SensePillar.audioStudio.isEnabled() else { return }
+    guard SensePillar.audioStudio.isEnabled(), !sleeping else { return }
     updateProcessListeners(snapshot.processes.flatMap(\.objects))
     outputDeviceID = snapshot.outputDeviceID
     selectedOutputID = snapshot.outputDeviceID
@@ -210,11 +237,12 @@ final class AudioStudioService: ObservableObject {
     outputDeviceName = snapshot.outputDeviceName
     masterVolume = snapshot.outputVolume ?? 0
     isMasterMuted = snapshot.outputMuted ?? false
+    if outputDeviceID == kAudioObjectUnknown { stopAllEngines() }
 
     var owned: [pid_t: (app: NSRunningApplication, objects: [AudioObjectID], playing: Bool)] = [:]
     for process in snapshot.processes {
       guard process.pid != ProcessInfo.processInfo.processIdentifier,
-        let app = Self.regularOwner(for: process)
+        let app = Self.regularOwner(for: process), !app.isTerminated
       else { continue }
       let ownerPID = app.processIdentifier
       var group = owned[ownerPID] ?? (app, [], false)
@@ -283,15 +311,14 @@ final class AudioStudioService: ObservableObject {
   }
 
   private func reconcileEngine(for app: AudioAppEntry) {
-    guard SensePillar.audioStudio.isEnabled() else { return }
+    guard SensePillar.audioStudio.isEnabled(), !sleeping else { return }
     guard isPerAppMixerSupported else { return }
     guard app.allowsVolumeControl else {
       engines.removeValue(forKey: app.id)?.stop()
       return
     }
-    let needsAdjustedGain = abs(app.volume - 1) >= 0.005
-    let shouldKeepPlayingEngine = engines[app.id] != nil && app.isPlaying
-    guard needsAdjustedGain || shouldKeepPlayingEngine else {
+    guard AudioTapBuilds.needsEngine(volume: app.volume, playing: app.isPlaying,
+                                    hasEngine: engines[app.id] != nil) else {
       engines.removeValue(forKey: app.id)?.stop()
       configureRefreshTimer()
       return
@@ -300,11 +327,10 @@ final class AudioStudioService: ObservableObject {
       engine.processObjects == app.processObjects,
       engine.outputDeviceID == outputDeviceID
     {
-      engine.gain = Self.gain(for: app.volume)
+      engine.setGain(Self.gain(for: app.volume))
       return
     }
-    guard !engineBuilds.contains(app.id), outputDeviceID != kAudioObjectUnknown else { return }
-    engineBuilds.insert(app.id)
+    guard outputDeviceID != kAudioObjectUnknown, let ticket = engineBuilds.begin(app.id) else { return }
     let id = app.id
     let objects = app.processObjects
     let gain = Self.gain(for: app.volume)
@@ -317,15 +343,22 @@ final class AudioStudioService: ObservableObject {
         }
         return nil
       }.value
-      engineBuilds.remove(id)
-      guard SensePillar.audioStudio.isEnabled(),
+      guard engineBuilds.finish(id, ticket: ticket) else { engine?.stop(); return }
+      guard SensePillar.audioStudio.isEnabled(), !sleeping,
         let latest = apps.first(where: { $0.id == id }),
         latest.allowsVolumeControl,
         outputDeviceID == device,
-        abs(latest.volume - 1) >= 0.005 || latest.isPlaying,
-        latest.processObjects == objects
+        AudioTapBuilds.needsEngine(volume: latest.volume, playing: latest.isPlaying,
+                                  hasEngine: engines[id] != nil),
+        latest.processObjects == objects,
+        NSRunningApplication(processIdentifier: latest.pid)?.isTerminated == false
       else {
         engine?.stop()
+        if let latest = apps.first(where: { $0.id == id }),
+           latest.processObjects != objects || outputDeviceID != device,
+           NSRunningApplication(processIdentifier: latest.pid)?.isTerminated == false {
+          reconcileEngine(for: latest)
+        }
         return
       }
       guard let engine else {
@@ -333,14 +366,15 @@ final class AudioStudioService: ObservableObject {
         return
       }
       needsAudioPermission = false
-      engine.gain = Self.gain(for: latest.volume)
+      engine.setGain(Self.gain(for: latest.volume))
       engines.updateValue(engine, forKey: id)?.stop()
       configureRefreshTimer()
     }
   }
 
   private func configureRefreshTimer() {
-    let interval: TimeInterval? = monitoringCount > 0 || !engines.isEmpty ? 15 : nil
+    let active = SensePillar.audioStudio.isEnabled() && !sleeping
+    let interval: TimeInterval? = active && (monitoringCount > 0 || !engines.isEmpty) ? 15 : nil
     refreshTimer?.invalidate()
     refreshTimer = nil
     guard let interval else { return }
@@ -355,7 +389,10 @@ final class AudioStudioService: ObservableObject {
   private func stopAllEngines() {
     for engine in engines.values { engine.stop() }
     engines.removeAll()
-    engineBuilds.removeAll()
+    engineBuilds.invalidate()
+    eventRefresh?.cancel()
+    eventRefresh = nil
+    configureRefreshTimer()
   }
 
   private static func gain(for volume: Double) -> Float {
@@ -433,7 +470,7 @@ private struct AudioSnapshot: Sendable {
 }
 
 extension AudioStudioService {
-  fileprivate nonisolated static func readSnapshot(includeApps: Bool) -> AudioSnapshot {
+  fileprivate nonisolated static func readSnapshot() -> AudioSnapshot {
     let device = defaultOutputDeviceID() ?? kAudioObjectUnknown
     return AudioSnapshot(
       outputs: readOutputDevices(),
@@ -443,7 +480,7 @@ extension AudioStudioService {
       outputDeviceName: stringProperty(device, selector: kAudioObjectPropertyName) ?? "Mac",
       outputVolume: readOutputVolume(device).map(Double.init),
       outputMuted: readOutputMute(device),
-      processes: includeApps ? readAudioProcesses() : []
+      processes: readAudioProcesses()
     )
   }
 

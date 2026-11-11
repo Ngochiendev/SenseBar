@@ -10,16 +10,10 @@ final class AudioTapEngine: @unchecked Sendable {
   let processObjects: [AudioObjectID]
   let outputDeviceID: AudioObjectID
 
-  var gain: Float {
-    get { requestedGain.value }
-    set {
-      let safeGain = Self.sanitizedGain(newValue)
-      requestedGain.value = safeGain
-      renderedGain.value = safeGain * channelCompensation
-    }
+  func setGain(_ gain: Float) {
+    renderedGain.value = Self.sanitizedGain(gain) * channelCompensation
   }
 
-  private let requestedGain: AtomicFloat
   private let renderedGain: AtomicFloat
   private let channelCompensation: Float
   private var tapID = AudioObjectID(kAudioObjectUnknown)
@@ -40,7 +34,6 @@ final class AudioTapEngine: @unchecked Sendable {
     self.processObjects = processObjects
     self.outputDeviceID = outputDeviceID
     self.channelCompensation = compensation
-    self.requestedGain = AtomicFloat(safeGain)
     self.renderedGain = AtomicFloat(safeGain * compensation)
 
     var tap = AudioObjectID(kAudioObjectUnknown)
