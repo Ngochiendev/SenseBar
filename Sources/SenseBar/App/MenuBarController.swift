@@ -15,7 +15,8 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private func setupPopover() {
         popover.behavior = .transient
         popover.animates = true
-        popover.hasFullSizeContent = PanelSurface.popoverHostsFullSizeContent
+        // Extend the background into the arrow; controls retain their safe area.
+        popover.hasFullSizeContent = true
         popover.delegate = self
     }
 

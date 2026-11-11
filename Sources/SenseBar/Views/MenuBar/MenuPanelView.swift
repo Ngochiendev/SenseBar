@@ -40,6 +40,7 @@ struct MenuPanelView: View {
     @AppStorage(DefaultsKey.notchExpandOnHover) private var expandOnHover: Bool = true
     @AppStorage(DefaultsKey.notchShowVisualizer) private var showVisualizer: Bool = true
     @State private var showingSettings: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
     @Namespace private var modeAnimation
 
     private var selectedMode: PopoverMode {
@@ -89,7 +90,11 @@ struct MenuPanelView: View {
         .padding(14)
         .frame(width: 356)
         .fixedSize(horizontal: false, vertical: true)
-        .panelGlassSurface()
+        .frame(maxHeight: .infinity)
+        .background {
+            (colorScheme == .light ? Color.white : Color(nsColor: .windowBackgroundColor))
+                .ignoresSafeArea()
+        }
         .onAppear {
             permissions.refreshStatus()
             audio.refreshAll()

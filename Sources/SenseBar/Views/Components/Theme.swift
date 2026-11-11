@@ -29,17 +29,6 @@ enum Theme {
 // MARK: - PanelSurface & Glass Card Modifiers (Dùng cho Menu Bar Popover)
 
 enum PanelSurface {
-    /// Chỉ bật hasFullSizeContent từ macOS 26 trở lên; trên macOS 14–15 giữ inset nguyên bản
-    /// của NSPopover để bo góc và mũi tên của Popover hiển thị sắc nét, không bị tràn viền.
-    static var popoverHostsFullSizeContent: Bool {
-        if #available(macOS 26.0, *) { return true }
-        return false
-    }
-
-    static func baseFill(for scheme: ColorScheme) -> Color {
-        scheme == .light ? Color.white : Color(nsColor: .windowBackgroundColor)
-    }
-
     static func cardFill(for scheme: ColorScheme) -> Color {
         scheme == .light ? Color.white : Color.white.opacity(0.075)
     }
@@ -55,11 +44,6 @@ enum PanelSurface {
 extension View {
     func panelCard(padded: Bool = true) -> some View {
         modifier(PanelCardModifier(padded: padded))
-    }
-
-    func panelGlassSurface() -> some View {
-        frame(maxHeight: .infinity)
-            .background(PanelGlassSurface())
     }
 }
 
@@ -134,20 +118,6 @@ private struct PanelCardModifier: ViewModifier {
                     endPoint: .bottom
                 )
             )
-        }
-    }
-}
-
-private struct PanelGlassSurface: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        if PanelSurface.popoverHostsFullSizeContent {
-            Rectangle()
-                .fill(PanelSurface.baseFill(for: colorScheme))
-                .ignoresSafeArea()
-        } else {
-            PanelSurface.baseFill(for: colorScheme)
         }
     }
 }
