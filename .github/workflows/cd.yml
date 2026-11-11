@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: sensebar-release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Build Signed DMG & Release
@@ -28,11 +32,16 @@ jobs:
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if git show-ref --verify --quiet "refs/tags/$TAG"; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "▸ $TAG đã tồn tại; bỏ qua để giữ nguyên tag và tài sản phát hành."
+            exit 0
+          fi
           echo "should_release=true" >> "$GITHUB_OUTPUT"
           echo "▸ Target Version: $VERSION -> Tag: $TAG (Release: true)"
 
       - name: Nhập chứng chỉ Apple Developer ID
-        if: ${{ env.APPLE_CERTIFICATE_BASE64 != '' }}
+        if: ${{ steps.meta.outputs.should_release == 'true' && env.APPLE_CERTIFICATE_BASE64 != '' }}
         env:
           APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -52,6 +61,7 @@ jobs:
           rm -f "$CERTIFICATE_PATH"
 
       - name: Build SenseBar Universal (arm64 + x86_64) & Signed DMG
+        if: steps.meta.outputs.should_release == 'true'
         env:
           SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY || '-' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -59,17 +69,21 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: zsh {0}
         run: |
+          xcodebuild -version
+          swift --version
+          xcrun --show-sdk-version
           chmod +x build-app.sh
           ./build-app.sh --dmg
 
       - name: Xóa Keychain tạm
-        if: always()
+        if: ${{ always() && steps.meta.outputs.should_release == 'true' }}
         shell: zsh {0}
         run: |
           security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/build_certificate.p12" "$RUNNER_TEMP/app-signing.keychain-db"
 
       - name: Chạy kiểm thử tự động (--selftest)
+        if: steps.meta.outputs.should_release == 'true'
         shell: zsh {0}
         run: |
           ./build/SenseBar.app/Contents/MacOS/SenseBar --selftest
@@ -77,6 +91,7 @@ jobs:
           lipo -info build/SenseBar.app/Contents/Frameworks/libSenseBarNowPlaying.dylib
 
       - name: Đóng gói file phát hành (DMG, ZIP & SHA256)
+        if: steps.meta.outputs.should_release == 'true'
         shell: zsh {0}
         run: |
           TAG="${{ steps.meta.outputs.tag }}"
