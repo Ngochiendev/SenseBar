@@ -5,12 +5,8 @@ import SwiftUI
 final class MenuBarController: NSObject, NSPopoverDelegate {
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
-    private let onOpenWelcome: () -> Void
 
-    init(
-        onOpenWelcome: @escaping () -> Void
-    ) {
-        self.onOpenWelcome = onOpenWelcome
+    override init() {
         super.init()
         setupPopover()
         setupStatusItem()
@@ -112,14 +108,6 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
-        let welcomeItem = NSMenuItem(
-            title: s.menuShowWelcome,
-            action: #selector(openWelcomeAction),
-            keyEquivalent: ""
-        )
-        welcomeItem.target = self
-        menu.addItem(welcomeItem)
-
         let aboutItem = NSMenuItem(
             title: s.menuAbout,
             action: #selector(openAboutAction),
@@ -149,10 +137,6 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
     @objc private func openSettingsAction() {
         showPopover()
-    }
-
-    @objc private func openWelcomeAction() {
-        onOpenWelcome()
     }
 
     @objc private func openAboutAction() {

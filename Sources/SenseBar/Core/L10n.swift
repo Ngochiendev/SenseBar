@@ -13,7 +13,6 @@ struct SenseStrings {
     // Menu Bar & App
     var menuBarTooltip: String
     var menuOpenPanel: String
-    var menuShowWelcome: String
     var menuSettings: String
     var menuAbout: String
     var menuQuit: String
@@ -32,7 +31,6 @@ struct SenseStrings {
     static let vi = SenseStrings(
         menuBarTooltip: "SenseBar — Đang hoạt động",
         menuOpenPanel: "Mở bảng điều khiển SenseBar",
-        menuShowWelcome: "Mở màn hình Chào mừng…",
         menuSettings: "Cài đặt SenseBar…",
         menuAbout: "Giới thiệu SenseBar",
         menuQuit: "Thoát SenseBar",
@@ -50,7 +48,6 @@ struct SenseStrings {
     static let en = SenseStrings(
         menuBarTooltip: "SenseBar — Active",
         menuOpenPanel: "Open SenseBar Panel",
-        menuShowWelcome: "Show Welcome Screen…",
         menuSettings: "SenseBar Settings…",
         menuAbout: "About SenseBar",
         menuQuit: "Quit SenseBar",

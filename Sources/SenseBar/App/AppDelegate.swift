@@ -12,11 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         DeviceNoticeService.shared.start()
         UpdateService.shared.start()
 
-        menuBarController = MenuBarController(
-            onOpenWelcome: { [weak self] in
-                self?.showWelcomeWindow(resetToFirstStep: true)
-            }
-        )
+        menuBarController = MenuBarController()
 
         let forceWelcome = CommandLine.arguments.contains("--welcome")
         let hasOnboarded = UserDefaults.standard.bool(forKey: DefaultsKey.hasOnboarded)
