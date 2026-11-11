@@ -65,9 +65,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
                 }
             )
             let host = NSHostingController(rootView: panelView)
-            if #available(macOS 13.0, *) {
-                host.sizingOptions = .preferredContentSize
-            }
+            host.sizingOptions = .preferredContentSize
             popover.contentViewController = host
         }
         NSApp.activate(ignoringOtherApps: true)

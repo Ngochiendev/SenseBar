@@ -142,7 +142,7 @@ final class HIDPeripheralMonitor: @unchecked Sendable {
 /// One alert per low-battery episode, with recovery hysteresis and a critical escalation.
 struct PeripheralLowBatteryPolicy {
     private var announced: [String: Int] = [:]
-    mutating func consume(id: String, reading: DeviceBatteryReading, baseline: Bool = false) -> Int? {
+    mutating func consume(id: String, reading: DeviceBatteryReading) -> Int? {
         let levels = [reading.percent, reading.left, reading.right, reading.casePercent]
             .compactMap { $0 }.filter { (0...100).contains($0) }
         guard let percent = levels.min() else { return nil }
@@ -152,6 +152,6 @@ struct PeripheralLowBatteryPolicy {
         guard announced[id].map({ stage < $0 }) ?? true else { return nil }
         if announced.count >= 128, announced[id] == nil { announced.removeAll() }
         announced[id] = stage
-        return baseline ? nil : percent
+        return percent
     }
 }

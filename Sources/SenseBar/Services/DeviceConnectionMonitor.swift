@@ -222,7 +222,7 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
         }
     }
 
-    /// One bounded metadata request per connection; no discovery scan or persistent polling.
+    /// Bounded metadata query on the battery worker, with a timeout and output cap.
     private static func readBluetoothData() -> Data? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")

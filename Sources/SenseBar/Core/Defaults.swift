@@ -6,7 +6,6 @@ enum DefaultsKey {
     static let language = "sensebar.language"
     static let hasOnboarded = "sensebar.hasOnboarded"
     static let onboardingStep = "sensebar.onboardingStep"
-    static let launchAtLogin = "sensebar.launchAtLogin"
     static let selectedPopoverTab = "sensebar.popoverTab"
 
     // 2 tính năng chính của SenseBar
@@ -45,24 +44,18 @@ enum DefaultsKey {
 
 enum LaunchAtLoginManager {
     static var isEnabled: Bool {
-        if #available(macOS 13.0, *) {
-            return SMAppService.mainApp.status == .enabled
-        }
-        return UserDefaults.standard.bool(forKey: DefaultsKey.launchAtLogin)
+        SMAppService.mainApp.status == .enabled
     }
 
     static func setEnabled(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: DefaultsKey.launchAtLogin)
-        if #available(macOS 13.0, *) {
-            do {
-                if enabled {
-                    try SMAppService.mainApp.register()
-                } else {
-                    try SMAppService.mainApp.unregister()
-                }
-            } catch {
-                // Khi chạy bản debug ngoài /Applications, vẫn lưu trạng thái vào UserDefaults
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
             }
+        } catch {
+            // Bản debug ngoài app bundle có thể chưa đăng ký được login item.
         }
     }
 }
