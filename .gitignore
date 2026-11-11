@@ -19,14 +19,23 @@ DerivedData/
 docs/
 .agents/
 .codegraph
+codegraph.json
 Tests/
 test/
-# Security & Apple Certificates
+*.log
+
+# Security, Environment & Apple Certificates
+.env
+.env.*
 *.p12
 *.p8
 *.cer
+*.pem
 *.certSigningRequest
+*.mobileprovision
+*.provisionprofile
 *.keychain
 *.keychain-db
+*.xcuserstate
 access.p12
 cert.p12

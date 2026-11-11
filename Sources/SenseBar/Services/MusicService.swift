@@ -59,8 +59,7 @@ final class MusicService: ObservableObject {
         }
         let candidates = [
             Bundle.main.bundleURL.deletingLastPathComponent(),
-            URL(fileURLWithPath: FileManager.default.currentDirectoryPath),
-            URL(fileURLWithPath: "/Volumes/Data/personal_project/SenseBar")
+            URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         ]
         for root in candidates {
             let dylib = root.appendingPathComponent("build/libSenseBarNowPlaying.dylib").path

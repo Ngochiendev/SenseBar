@@ -380,7 +380,8 @@ func exportGIF(isPill: Bool, outputURL: URL) throws {
     }
 }
 
-let assetsDir = URL(fileURLWithPath: "/Volumes/Data/personal_project/SenseBar/assets")
+let projectRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+let assetsDir = projectRoot.appendingPathComponent("assets")
 try FileManager.default.createDirectory(at: assetsDir, withIntermediateDirectories: true)
 
 let notchURL = assetsDir.appendingPathComponent("dynamic-island-notch.gif")
