@@ -1,8 +1,7 @@
 import Combine
 import Foundation
 
-/// Ngôn ngữ hiển thị của SenseBar. Mặc định dùng Tiếng Việt (.vi),
-/// sẵn sàng hỗ trợ Tiếng Anh (.en) trong tương lai.
+/// Ngôn ngữ hiển thị của SenseBar, mặc định là Tiếng Việt.
 enum AppLanguage: String, CaseIterable, Identifiable {
     case vi = "vi"
     case en = "en"
@@ -19,39 +18,12 @@ struct SenseStrings {
     var menuAbout: String
     var menuQuit: String
 
-    // Onboarding Step 1: Welcome
-    var welcomeTitle: String
-    var welcomeSubtitle: String
-
     // 2 Core Features
     var pillar1Title: String
     var pillar1Subtitle: String
-    var pillar1Tags: [String]
 
     var pillar2Title: String
     var pillar2Subtitle: String
-    var pillar2Tags: [String]
-
-    // Onboarding Step 2: Features Selection
-    var purposeTitle: String
-    var purposeSubtitle: String
-    var purposeActiveCountFormat: String
-
-    // Onboarding Step 3: Permissions
-    var permissionsTitle: String
-    var permissionsSubtitle: String
-    var permNote: String
-
-    // Onboarding Step 4: Done
-    var doneTitle: String
-    var doneSubtitle: String
-    var doneMenuBarHint: String
-    var doneActivePillarsTitle: String
-
-    // Navigation Buttons
-    var btnBack: String
-    var btnContinue: String
-    var btnStart: String
 
     // Cài đặt (Settings)
     var settingsLaunchAtLogin: String
@@ -65,33 +37,11 @@ struct SenseStrings {
         menuAbout: "Giới thiệu SenseBar",
         menuQuit: "Thoát SenseBar",
 
-        welcomeTitle: "SenseBar",
-        welcomeSubtitle: "Tiện ích thanh Menu Bar gọn nhẹ cho macOS — Tích hợp Tai thỏ & Dynamic Island trình phát nhạc cùng Bộ trộn âm lượng riêng cho từng ứng dụng.",
-
         pillar1Title: "Tai thỏ & Dynamic Island",
         pillar1Subtitle: "Biến phần tai thỏ MacBook thành khu vực điều khiển nhạc trực quan: hiển thị ảnh bìa, sóng nhạc theo màu đĩa và điều khiển phát nhạc mượt mà.",
-        pillar1Tags: ["Trình phát nhạc", "Sóng nhạc", "Ôm sát tai thỏ", "Viên nang nổi"],
 
         pillar2Title: "Bộ trộn âm thanh (Audio Studio)",
         pillar2Subtitle: "Chỉnh âm lượng loa tổng và điều chỉnh âm lượng độc lập cho từng ứng dụng đang chạy (0% – 200%).",
-        pillar2Tags: ["Âm lượng từng App", "Khuếch đại 200%", "Đổi nhanh Loa", "Tắt tiếng nhanh"],
-
-        purposeTitle: "Chọn tính năng bạn muốn dùng",
-        purposeSubtitle: "Bật những bộ công cụ phù hợp với nhu cầu của bạn. Bạn có thể thay đổi bất cứ lúc nào trong phần Cài đặt.",
-        purposeActiveCountFormat: "Đang bật %d / 2 tính năng",
-
-        permissionsTitle: "Cấp quyền truy cập cần thiết",
-        permissionsSubtitle: "SenseBar chỉ yêu cầu những quyền cần thiết cho các tính năng bạn đang bật. Mọi dữ liệu luôn nằm an toàn trên máy Mac của bạn.",
-        permNote: "Bạn có thể cấp quyền ngay bây giờ hoặc bật sau trong phần Cài đặt.",
-
-        doneTitle: "SenseBar",
-        doneSubtitle: "Thiết lập hoàn tất. Bắt đầu sử dụng ngay trên thanh Menu Bar của bạn.",
-        doneMenuBarHint: "Nhấn vào biểu tượng SenseBar trên thanh Menu Bar ở góc trên màn hình để mở nhanh bảng điều khiển bất cứ lúc nào.",
-        doneActivePillarsTitle: "Tính năng đang bật:",
-
-        btnBack: "Quay lại",
-        btnContinue: "Tiếp tục",
-        btnStart: "Bắt đầu sử dụng",
 
         settingsLaunchAtLogin: "Khởi động cùng macOS",
         settingsLaunchAtLoginDesc: "Tự động chạy SenseBar trên thanh Menu Bar khi bạn đăng nhập vào máy Mac."
@@ -105,33 +55,11 @@ struct SenseStrings {
         menuAbout: "About SenseBar",
         menuQuit: "Quit SenseBar",
 
-        welcomeTitle: "SenseBar",
-        welcomeSubtitle: "A lightweight macOS Menu Bar companion — Uniting Notch Dynamic Island Music Player and Per-App Volume Mixer.",
-
         pillar1Title: "Dynamic Island & Notch",
         pillar1Subtitle: "Turn your MacBook notch into an interactive music studio with album artwork, colored audio visualizer, and smooth playback controls.",
-        pillar1Tags: ["Music Player", "Visualizer", "Notch Cutout", "Floating Pill"],
 
         pillar2Title: "Audio Studio & Volume Mixer",
         pillar2Subtitle: "Control master speaker volume and adjust individual app volumes (0% – 200%) independently.",
-        pillar2Tags: ["Per-App Volume", "200% Boost", "Speaker Control", "Quick Mute"],
-
-        purposeTitle: "Choose what you want to use",
-        purposeSubtitle: "Enable the tools that fit your workflow. You can change these anytime in Settings.",
-        purposeActiveCountFormat: "%d of 2 features enabled",
-
-        permissionsTitle: "Required Permissions",
-        permissionsSubtitle: "SenseBar only asks for permissions needed by the features you enabled. All data stays on your Mac.",
-        permNote: "You can grant permissions now or enable them later in Settings.",
-
-        doneTitle: "SenseBar is Ready!",
-        doneSubtitle: "Setup is complete. Access SenseBar anytime from your Menu Bar.",
-        doneMenuBarHint: "Click the SenseBar icon in your macOS Menu Bar anytime to open the control panel.",
-        doneActivePillarsTitle: "Enabled features:",
-
-        btnBack: "Back",
-        btnContinue: "Continue",
-        btnStart: "Start Using",
 
         settingsLaunchAtLogin: "Launch at Login",
         settingsLaunchAtLoginDesc: "Automatically start SenseBar in the Menu Bar when you log into your Mac."

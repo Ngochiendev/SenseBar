@@ -2,18 +2,6 @@ import AppKit
 import SwiftUI
 
 enum Theme {
-    /// Dải màu cực quang đặc trưng của SenseBar Aurora Studio
-    static let auroraGradient = LinearGradient(
-        colors: [
-            Color(red: 1.00, green: 0.68, blue: 0.34),
-            Color(red: 1.00, green: 0.24, blue: 0.52),
-            Color(red: 0.58, green: 0.34, blue: 0.98),
-            Color(red: 0.05, green: 0.82, blue: 0.98)
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
     /// Nền vũ trụ sâu thẳm cho Hero Banner
     static let spaceGradient = LinearGradient(
         colors: [

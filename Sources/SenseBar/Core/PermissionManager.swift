@@ -66,13 +66,7 @@ final class PermissionManager: NSObject, ObservableObject, CBCentralManagerDeleg
             NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: nil)
         }
         let axTrusted = AXIsProcessTrusted()
-        if Thread.isMainThread {
-            handleStatusChange(axTrusted)
-        } else {
-            DispatchQueue.main.async {
-                self.handleStatusChange(axTrusted)
-            }
-        }
+        handleStatusChange(axTrusted)
     }
 
     /// Xin quyền phụ kiện khi người dùng chủ động bấm, không gắn với nút hoàn tất.
