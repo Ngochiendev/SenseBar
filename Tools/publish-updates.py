@@ -80,6 +80,11 @@ def main():
         staging = Path(directory)
         shutil.copy2(archive, staging / archive.name)
         rss = ET.Element("rss", version="2.0")
+        # ElementTree only declares namespaces used by existing elements.
+        # An empty first-release feed still needs this declaration because
+        # generate_appcast reuses it when adding sparkle-prefixed elements.
+        if not retained:
+            rss.set("xmlns:sparkle", NS)
         channel = ET.SubElement(rss, "channel")
         ET.SubElement(channel, "title").text = "SenseBar Updates"
         for old in retained:
