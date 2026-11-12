@@ -99,52 +99,9 @@ struct FitAdjustmentCard: View {
                 .background(Rectangle().fill(Color.white.opacity(0.12)).background(.ultraThinMaterial))
 
                 if isPill {
-                    Capsule(style: .continuous)
-                        .fill(Color.black)
-                        .frame(
-                            width: max(40, 105 + CGFloat(capsuleFitWidth) * 0.4),
-                            height: max(9, 13 + CGFloat(capsuleFitHeight) * 0.7)
-                        )
-                        .padding(.top, max(1, 2.8 + CGFloat(capsuleFitDrop) * 0.45))
-                        .overlay(
-                            HStack(spacing: 3) {
-                                Circle().fill(Color(red: 0.15, green: 0.85, blue: 0.45)).frame(width: 2.8, height: 2.8)
-                                Spacer()
-                                Image(systemName: "waveform")
-                                    .font(.system(size: 5.5, weight: .bold))
-                                    .foregroundStyle(Color(red: 0.20, green: 0.60, blue: 1.0))
-                            }
-                            .padding(.horizontal, 6)
-                            .padding(.top, max(1, 2.8 + CGFloat(capsuleFitDrop) * 0.45))
-                        )
-                        .shadow(color: Color.black.opacity(0.5), radius: 4, y: 1.5)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitWidth)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitHeight)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitDrop)
+                    capsulePreview
                 } else {
-                    NotchAttachedShape(topShoulder: 4, bottomRadius: 5.5)
-                        .fill(Color.black)
-                        .frame(
-                            width: max(48, 115 + CGFloat(capsuleFitWidth) * 0.4),
-                            height: max(12, 19 + CGFloat(capsuleFitHeight) * 0.7)
-                        )
-                        .overlay(
-                            HStack(spacing: 3) {
-                                Circle()
-                                    .fill(Color(red: 0.08, green: 0.08, blue: 0.12))
-                                    .frame(width: 4, height: 4)
-                                    .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.4))
-                                Spacer()
-                                Image(systemName: "waveform")
-                                    .font(.system(size: 5.5, weight: .bold))
-                                    .foregroundStyle(Color(red: 0.20, green: 0.60, blue: 1.0))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.top, 2)
-                        )
-                        .shadow(color: Color.black.opacity(0.5), radius: 4, y: 1.5)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitWidth)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitHeight)
+                    notchPreview
                 }
             }
             .frame(height: 72)
@@ -182,6 +139,57 @@ struct FitAdjustmentCard: View {
                 }
             }
         }
+    }
+
+    private var capsulePreview: some View {
+        Capsule(style: .continuous)
+            .fill(Color.black)
+            .frame(
+                width: max(40, 105 + CGFloat(capsuleFitWidth) * 0.4),
+                height: max(9, 13 + CGFloat(capsuleFitHeight) * 0.7)
+            )
+            .padding(.top, max(1, 2.8 + CGFloat(capsuleFitDrop) * 0.45))
+            .overlay(
+                HStack(spacing: 3) {
+                    Circle().fill(Color(red: 0.15, green: 0.85, blue: 0.45)).frame(width: 2.8, height: 2.8)
+                    Spacer()
+                    Image(systemName: "waveform")
+                        .font(.system(size: 5.5, weight: .bold))
+                        .foregroundStyle(Color(red: 0.20, green: 0.60, blue: 1.0))
+                }
+                .padding(.horizontal, 6)
+                .padding(.top, max(1, 2.8 + CGFloat(capsuleFitDrop) * 0.45))
+            )
+            .shadow(color: Color.black.opacity(0.5), radius: 4, y: 1.5)
+            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitWidth)
+            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitHeight)
+            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitDrop)
+    }
+
+    private var notchPreview: some View {
+        NotchAttachedShape(topShoulder: 4, bottomRadius: 5.5)
+            .fill(Color.black)
+            .frame(
+                width: max(48, 115 + CGFloat(capsuleFitWidth) * 0.4),
+                height: max(12, 19 + CGFloat(capsuleFitHeight) * 0.7)
+            )
+            .overlay(
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(Color(red: 0.08, green: 0.08, blue: 0.12))
+                        .frame(width: 4, height: 4)
+                        .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.4))
+                    Spacer()
+                    Image(systemName: "waveform")
+                        .font(.system(size: 5.5, weight: .bold))
+                        .foregroundStyle(Color(red: 0.20, green: 0.60, blue: 1.0))
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 2)
+            )
+            .shadow(color: Color.black.opacity(0.5), radius: 4, y: 1.5)
+            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitWidth)
+            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: capsuleFitHeight)
     }
 
     private func sliderSettingRow(icon: String, title: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double) -> some View {
