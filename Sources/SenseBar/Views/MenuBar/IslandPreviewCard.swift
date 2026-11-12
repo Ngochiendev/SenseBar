@@ -30,10 +30,14 @@ struct IslandPreviewCard: View {
                      ? l10n.string(vi: "Kiểu Viên nang", en: "Pill Style")
                      : l10n.string(vi: "Kiểu Tai thỏ", en: "Notch Style"))
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.primary.opacity(0.06)))
+                    .foregroundStyle(.blue)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.blue.opacity(0.10)))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color.blue.opacity(0.28), lineWidth: 0.8)
+                    )
             }
 
             // Hình ảnh Example mô phỏng trực tiếp thanh Menu Bar & Tai thỏ MacBook (tối ưu 15fps khi mở popover)

@@ -5,7 +5,7 @@ import SwiftUI
 struct DisplayTargetCard: View {
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var islandController = IslandController.shared
-    @AppStorage(DefaultsKey.notchDisplayTarget) private var displayTarget: String = "automatic"
+    @AppStorage(DefaultsKey.notchDisplayTarget) private var displayTarget: String = "all"
     @AppStorage(DefaultsKey.notchExpandAllDisplays) private var expandAllDisplays: Bool = false
     @AppStorage(DefaultsKey.notchHideInFullscreen) private var hideInFullscreen: Bool = true
 

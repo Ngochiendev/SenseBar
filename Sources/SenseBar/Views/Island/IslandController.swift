@@ -122,7 +122,7 @@ final class IslandController: ObservableObject {
             DefaultsKey.notchExpandOnHover: true,
             DefaultsKey.notchShowVisualizer: true,
             DefaultsKey.notchHideInFullscreen: true,
-            DefaultsKey.notchDisplayTarget: "automatic",
+            DefaultsKey.notchDisplayTarget: "all",
             DefaultsKey.notchExpandAllDisplays: false,
             DefaultsKey.notchDeviceNotices: true,
             DefaultsKey.notchLowPeripheralBattery: true,
@@ -141,7 +141,7 @@ final class IslandController: ObservableObject {
     }
 
     var targetScreenForActivePanel: NSScreen {
-        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
+        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "all"
         return targetScreen(for: mode) ?? NSScreen.main ?? NSScreen.screens.first ?? NSScreen()
     }
 
@@ -189,7 +189,7 @@ final class IslandController: ObservableObject {
 
     /// Chỉ hiện bộ chọn Capsule / Notch khi Island có thể xuất hiện trên màn hình không tai thỏ.
     private func refreshStyleAvailability() {
-        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
+        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "all"
         let candidates: [NSScreen] = (mode == "pointer" || mode == "all")
             ? NSScreen.screens
             : [targetScreen(for: mode)].compactMap { $0 }
@@ -327,7 +327,7 @@ final class IslandController: ObservableObject {
         guard SensePillar.dynamicIsland.isEnabled() else { return }
         setupPanelIfNeeded()
 
-        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
+        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "all"
         let activeScreen = targetScreen(for: mode)
         let hideInFullscreen = UserDefaults.standard.bool(forKey: DefaultsKey.notchHideInFullscreen)
 
@@ -426,7 +426,7 @@ final class IslandController: ObservableObject {
             setPanelVisible(mainPanel, !isMainFullscreen)
         }
 
-        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
+        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "all"
         if mode == "all" {
             for (id, mirror) in mirrorPanels {
                 let isMirrorFullscreen = FullscreenDetector.isFullscreen(on: id)
@@ -637,7 +637,7 @@ final class IslandController: ObservableObject {
                 mainPanel.ignoresMouseEvents = true
             }
             // Chỉ tra cứu màn hình nếu con trỏ chuột đã vượt khỏi biên màn hình hiện tại
-            let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
+            let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "all"
             if (mode == "pointer" || mode == "all" || mode == "automatic") && !currentScreen.frame.contains(mouse) {
                 if let mouseScreen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
                    mouseScreen.displayID != currentScreen.displayID {
@@ -648,7 +648,7 @@ final class IslandController: ObservableObject {
         }
 
         // Khi con trỏ chuyển màn hình thì island chuyển theo ngay lập tức
-        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "automatic"
+        let mode = UserDefaults.standard.string(forKey: DefaultsKey.notchDisplayTarget) ?? "all"
         if (mode == "pointer" || mode == "all" || mode == "automatic") && !isExpanded {
             if !currentScreen.frame.contains(mouse),
                let mouseScreen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }),

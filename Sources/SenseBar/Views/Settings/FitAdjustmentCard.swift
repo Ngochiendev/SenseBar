@@ -236,15 +236,16 @@ struct FitAdjustmentCard: View {
             .buttonStyle(.plain)
 
             let intVal = Int(value.wrappedValue)
-            Text("\(intVal > 0 ? "+" : "")\(intVal) px")
+            Text("\(intVal > 0 ? "+" : "")\(intVal)\u{00A0}px")
                 .font(.system(size: 10, weight: .semibold).monospacedDigit())
                 .foregroundStyle(intVal == 0 ? Color.secondary : Color.blue)
+                .lineLimit(1)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
                 .background(
                     Capsule().fill(intVal == 0 ? Color.primary.opacity(0.05) : Color.blue.opacity(0.12))
                 )
-                .frame(width: 50, alignment: .trailing)
+                .frame(width: 58, alignment: .trailing)
         }
     }
 }
