@@ -322,7 +322,7 @@ public func sensebarNowPlayingWatch() {
         scheduleRefresh()
     }
 
-    var framer = PlaybackLineFramer()
+    nonisolated(unsafe) var framer = PlaybackLineFramer()
     FileHandle.standardInput.readabilityHandler = { input in
         let chunk = input.availableData
         if chunk.isEmpty { exit(0) }
