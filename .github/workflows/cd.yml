@@ -82,7 +82,7 @@ jobs:
       - name: Validate Sparkle signing configuration
         if: steps.meta.outputs.should_release == 'true'
         env:
-          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -91,15 +91,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$SPARKLE_PUBLIC_KEY"
-          test -n "$SPARKLE_PRIVATE_KEY"
-          test -n "$SIGN_IDENTITY" && test "$SIGN_IDENTITY" != '-'
-          test -n "$APPLE_ID" && test -n "$APPLE_PASSWORD" && test -n "$APPLE_TEAM_ID"
+          for name in SPARKLE_PUBLIC_KEY SPARKLE_PRIVATE_KEY SIGN_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing repository configuration: $name"
+              exit 1
+            fi
+          done
+          if [[ "$SIGN_IDENTITY" == '-' ]]; then
+            echo "::error::SIGN_IDENTITY must be a Developer ID signing identity."
+            exit 1
+          fi
 
       - name: Build SenseBar Universal (arm64 + x86_64) & Signed DMG
         if: steps.meta.outputs.should_release == 'true'
         env:
-          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
           SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY || '-' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
