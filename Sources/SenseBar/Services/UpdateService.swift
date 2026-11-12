@@ -1,8 +1,9 @@
 import AppKit
 import Foundation
+import Sparkle
 
 @MainActor
-final class UpdateService: ObservableObject {
+final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
     static let shared = UpdateService()
 
     struct ReleaseInfo: Equatable {
@@ -32,10 +33,10 @@ final class UpdateService: ObservableObject {
         return nil
     }
 
-    private var timer: Timer?
-    private let checkInterval: TimeInterval = 24 * 60 * 60
+    private var controller: SPUStandardUpdaterController?
 
-    private init() {
+    private override init() {
+        super.init()
         UserDefaults.standard.register(defaults: [
             DefaultsKey.autoCheckUpdates: true
         ])
@@ -43,98 +44,83 @@ final class UpdateService: ObservableObject {
 
     /// Khởi động kiểm tra cập nhật tự động khi mở ứng dụng và định kỳ mỗi 24 giờ.
     func start() {
-        schedulePeriodicCheck()
+        if applySimulatedUpdateIfRequested() { return }
 
-        guard UserDefaults.standard.bool(forKey: DefaultsKey.autoCheckUpdates) else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            self?.checkForUpdates(manual: false)
+        guard controller == nil else { return }
+        guard let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
+              Data(base64Encoded: key)?.count == 32 else {
+            status = .failed
+            return
         }
+        let controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil)
+        self.controller = controller
+        controller.updater.automaticallyChecksForUpdates = UserDefaults.standard.bool(forKey: DefaultsKey.autoCheckUpdates)
+        controller.startUpdater()
     }
 
-    private func schedulePeriodicCheck() {
-        timer?.invalidate()
-        let newTimer = Timer(timeInterval: checkInterval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard UserDefaults.standard.bool(forKey: DefaultsKey.autoCheckUpdates) else { return }
-                self?.checkForUpdates(manual: false)
-            }
-        }
-        newTimer.tolerance = 300
-        RunLoop.main.add(newTimer, forMode: .common)
-        timer = newTimer
+    func setAutomaticChecks(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: DefaultsKey.autoCheckUpdates)
+        controller?.updater.automaticallyChecksForUpdates = enabled
     }
 
-    /// Kiểm tra phiên bản mới nhất từ GitHub Releases API.
+    /// Kiểm tra và cài cập nhật qua Sparkle từ appcast HTTPS.
     /// - Parameter manual: `true` nếu người dùng chủ động bấm nút kiểm tra.
     func checkForUpdates(manual: Bool = false) {
-        if status == .checking { return }
+        if applySimulatedUpdateIfRequested() { return }
+        if controller == nil { start() }
+        guard let controller, controller.updater.canCheckForUpdates else { return }
         if manual {
             status = .checking
+            controller.checkForUpdates(nil)
+        } else {
+            controller.updater.checkForUpdatesInBackground()
         }
+    }
 
-        var request = URLRequest(url: AppInfo.latestReleaseAPIURL)
-        request.httpMethod = "GET"
-        request.timeoutInterval = 10
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("\(AppInfo.name)/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
-        request.cachePolicy = .reloadIgnoringLocalCacheData
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        status = .updateAvailable(ReleaseInfo(version: item.displayVersionString,
+            htmlURL: item.releaseNotesURL ?? URL(string: "https://sensebar.site")!, dmgDownloadURL: nil))
+    }
 
-        Task {
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let http = response as? HTTPURLResponse else {
-                    if manual { self.status = .failed }
-                    return
-                }
-                if http.statusCode == 404 {
-                    // Repo đang để Private hoặc chưa có bản Release công khai nào
-                    self.status = .upToDate
-                    return
-                }
-                guard (200...299).contains(http.statusCode) else {
-                    if manual { self.status = .failed }
-                    return
-                }
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        status = .upToDate
+    }
 
-                let payload = try JSONDecoder().decode(GitHubReleasePayload.self, from: data)
-                guard !payload.draft, !payload.prerelease else {
-                    if manual { self.status = .upToDate }
-                    return
-                }
+    func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+        status = .failed
+    }
 
-                let cleanVersion = Self.normalizeVersion(payload.tagName)
-                let currentVersion = Self.normalizeVersion(AppInfo.version)
+    func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
+        if status == .checking { status = error == nil ? .idle : .failed }
+    }
 
-                if Self.isNewerVersion(cleanVersion, than: currentVersion),
-                   let htmlURL = URL(string: payload.htmlURL) {
-                    let dmgURL = payload.assets
-                        .first { $0.name.lowercased().hasSuffix(".dmg") }
-                        .flatMap { URL(string: $0.browserDownloadURL) }
+    /// Hiển thị trạng thái có bản cập nhật trong debug build mà không truy cập GitHub.
+    /// Dùng `--simulate-update 1.3.0`; nếu bỏ version, mặc định hiển thị `9.9.9`.
+    private func applySimulatedUpdateIfRequested() -> Bool {
+#if DEBUG
+        let arguments = CommandLine.arguments
+        guard let flagIndex = arguments.firstIndex(of: "--simulate-update") else { return false }
 
-                    self.status = .updateAvailable(
-                        ReleaseInfo(
-                            version: cleanVersion,
-                            htmlURL: htmlURL,
-                            dmgDownloadURL: dmgURL
-                        )
-                    )
-                } else {
-                    self.status = .upToDate
-                }
-            } catch {
-                if manual {
-                    self.status = .failed
-                }
-            }
-        }
+        let valueIndex = arguments.index(after: flagIndex)
+        let requestedVersion = arguments.indices.contains(valueIndex) && !arguments[valueIndex].hasPrefix("--")
+            ? Self.normalizeVersion(arguments[valueIndex])
+            : "9.9.9"
+
+        status = .updateAvailable(
+            ReleaseInfo(
+                version: requestedVersion.isEmpty ? "9.9.9" : requestedVersion,
+                htmlURL: AppInfo.releasesURL,
+                dmgDownloadURL: nil
+            )
+        )
+        return true
+#else
+        return false
+#endif
     }
 
     func openDownloadPage() {
-        if let release = availableRelease {
-            NSWorkspace.shared.open(release.preferredDownloadURL)
-        } else {
-            NSWorkspace.shared.open(AppInfo.releasesURL)
-        }
+        checkForUpdates(manual: true)
     }
 
     func openReleaseNotes() {
@@ -171,31 +157,5 @@ final class UpdateService: ObservableObject {
             }
         }
         return false
-    }
-}
-
-private struct GitHubReleasePayload: Decodable {
-    let tagName: String
-    let htmlURL: String
-    let draft: Bool
-    let prerelease: Bool
-    let assets: [Asset]
-
-    struct Asset: Decodable {
-        let name: String
-        let browserDownloadURL: String
-
-        enum CodingKeys: String, CodingKey {
-            case name
-            case browserDownloadURL = "browser_download_url"
-        }
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case tagName = "tag_name"
-        case htmlURL = "html_url"
-        case draft
-        case prerelease
-        case assets
     }
 }

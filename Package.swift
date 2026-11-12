@@ -11,6 +11,9 @@ let package = Package(
         .executable(name: "SenseBar", targets: ["SenseBar"]),
         .library(name: "SenseBarNowPlaying", type: .dynamic, targets: ["NowPlayingBridge"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1")
+    ],
     targets: [
         .target(
             name: "SenseBarAudioBridge",
@@ -20,8 +23,9 @@ let package = Package(
         ),
         .executableTarget(
             name: "SenseBar",
-            dependencies: ["SenseBarAudioBridge"],
-            path: "Sources/SenseBar"
+            dependencies: ["SenseBarAudioBridge", .product(name: "Sparkle", package: "Sparkle")],
+            path: "Sources/SenseBar",
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
         .target(
             name: "NowPlayingBridge",

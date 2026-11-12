@@ -70,10 +70,19 @@ mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources" "$STAGE/Contents/Fr
 cp "$BIN_DIR/SenseBar" "$STAGE/Contents/MacOS/SenseBar"
 cp "$BIN_DIR/libSenseBarNowPlaying.dylib" "$STAGE/Contents/Frameworks/libSenseBarNowPlaying.dylib"
 cp "$BIN_DIR/libSenseBarNowPlaying.dylib" "build/libSenseBarNowPlaying.dylib"
+SPARKLE_FRAMEWORK=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+ditto "$SPARKLE_FRAMEWORK" "$STAGE/Contents/Frameworks/Sparkle.framework"
 cp build/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
 cp build/MenuBarIcon.png build/MenuBarIcon@2x.png build/BrandMark.png "$STAGE/Contents/Resources/"
 find Resources -name "*.svg" -exec cp {} "$STAGE/Contents/Resources/" \; 2>/dev/null || true
 cp Resources/Info.plist "$STAGE/Contents/Info.plist"
+if [[ -n "${SPARKLE_PUBLIC_KEY:-}" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey $SPARKLE_PUBLIC_KEY" "$STAGE/Contents/Info.plist" 2>/dev/null ||
+    /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_KEY" "$STAGE/Contents/Info.plist"
+fi
+if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+  /usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$STAGE/Contents/Info.plist" >/dev/null
+fi
 printf 'APPL????' > "$STAGE/Contents/PkgInfo"
 
 # Xoá các thuộc tính mở rộng / quarantine thừa trước khi ký
@@ -92,6 +101,12 @@ if [[ "$SIGN_IDENTITY" == "-" ]]; then
   codesign --force --entitlements Resources/SenseBar.entitlements -s - "$STAGE"
 else
   echo "▸ Signing SenseBar.app with Developer Certificate..."
+  # Sign nested Sparkle code inside-out, preserving each helper's entitlements.
+  SPARKLE_CONTENTS="$STAGE/Contents/Frameworks/Sparkle.framework/Versions/B"
+  for helper in "$SPARKLE_CONTENTS"/XPCServices/*.xpc "$SPARKLE_CONTENTS"/Updater.app "$SPARKLE_CONTENTS"/Autoupdate; do
+    codesign --force --options runtime --timestamp --preserve-metadata=entitlements -s "$SIGN_IDENTITY" "$helper"
+  done
+  codesign --force --options runtime --timestamp -s "$SIGN_IDENTITY" "$STAGE/Contents/Frameworks/Sparkle.framework"
   codesign --force --options runtime --timestamp -s "$SIGN_IDENTITY" "build/libSenseBarNowPlaying.dylib"
   codesign --force --options runtime --timestamp -s "$SIGN_IDENTITY" "$STAGE/Contents/Frameworks/libSenseBarNowPlaying.dylib"
   codesign --force --options runtime --timestamp --entitlements Resources/SenseBar.entitlements -s "$SIGN_IDENTITY" "$STAGE"
@@ -137,6 +152,7 @@ if [[ "$BUILD_DMG" -eq 1 ]]; then
         --password "$APPLE_PASSWORD" \
         --team-id "$APPLE_TEAM_ID" \
         --wait
+      staple_with_retry "$STAGE"
 
       echo "▸ Chờ Apple CloudKit đồng bộ ticket (10s)..."
       sleep 10
@@ -145,6 +161,7 @@ if [[ "$BUILD_DMG" -eq 1 ]]; then
     elif [[ -n "${NOTARY_PROFILE:-}" ]]; then
       echo "▸ Submitting $DMG_PATH to Apple using profile '$NOTARY_PROFILE'..."
       xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
+      staple_with_retry "$STAGE"
       echo "▸ Chờ Apple CloudKit đồng bộ ticket (10s)..."
       sleep 10
       staple_with_retry "$DMG_PATH"

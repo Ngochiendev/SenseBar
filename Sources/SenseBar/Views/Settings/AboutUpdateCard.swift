@@ -149,7 +149,7 @@ struct AboutUpdateCard: View {
                     Button {
                         updateService.openDownloadPage()
                     } label: {
-                        Text(l10n.string(vi: "Tải về", en: "Download"))
+                        Text(l10n.string(vi: "Cập nhật", en: "Update"))
                             .font(.system(size: 10.5, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 9)
@@ -196,6 +196,9 @@ struct AboutUpdateCard: View {
                 Spacer()
 
                 Toggle("", isOn: $autoCheckUpdates)
+                    .onChange(of: autoCheckUpdates) { _, enabled in
+                        updateService.setAutomaticChecks(enabled)
+                    }
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .controlSize(.mini)

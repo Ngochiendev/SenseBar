@@ -36,6 +36,7 @@ test/
 *.provisionprofile
 *.keychain
 *.keychain-db
+sparkle-private-key*
 *.xcuserstate
 access.p12
 cert.p12

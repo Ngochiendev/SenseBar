@@ -78,9 +78,27 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
           rm -f "$CERTIFICATE_PATH"
 
+      - name: Validate Sparkle signing configuration
+        if: steps.meta.outputs.should_release == 'true'
+        env:
+          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SPARKLE_PUBLIC_KEY"
+          test -n "$SPARKLE_PRIVATE_KEY"
+          test -n "$SIGN_IDENTITY" && test "$SIGN_IDENTITY" != '-'
+          test -n "$APPLE_ID" && test -n "$APPLE_PASSWORD" && test -n "$APPLE_TEAM_ID"
+
       - name: Build SenseBar Universal (arm64 + x86_64) & Signed DMG
         if: steps.meta.outputs.should_release == 'true'
         env:
+          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
           SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY || '-' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
@@ -145,6 +163,25 @@ jobs:
           } > build/RELEASE_NOTES.md
 
           cat build/RELEASE_NOTES.md
+
+      - name: Publish Sparkle update and retain two versions
+        if: steps.meta.outputs.should_release == 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
+          SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          (umask 077; printf '%s\n' "$SFTP_PRIVATE_KEY" > "$HOME/.ssh/sensebar_deploy")
+          (umask 077; printf '%s\n' "$SFTP_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts")
+          trap 'rm -f "$HOME/.ssh/sensebar_deploy"' EXIT
+          python3 Tools/publish-updates.py
 
       - name: Tự động gắn Tag ${{ steps.meta.outputs.tag }} & Phát hành GitHub Release
         if: steps.meta.outputs.should_release == 'true'

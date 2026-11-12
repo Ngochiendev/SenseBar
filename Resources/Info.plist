@@ -51,5 +51,15 @@
 	<string>© 2026 SenseBar by ngochiendev</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://updates.sensebar.site/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>cYoihyNkNqSfjSolG0O0c9dN/hUva0NAxhwFKHxQJR8=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>
