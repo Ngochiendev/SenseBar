@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Sparkle
 
 MainActor.assumeIsolated {
     if CommandLine.arguments.contains("--selftest") {
@@ -22,6 +23,31 @@ MainActor.assumeIsolated {
         assert(PopoverMode.allCases.count == 2, "Menu Bar Popover must have Dynamic Island & Audio tabs")
         assert(UpdateService.isNewerVersion("v1.10.0", than: "1.9.2"), "Semantic version check failed")
         assert(!UpdateService.isNewerVersion("v1.1.2", than: "1.1.2"), "Equal version should not be newer")
+        let noUpdate = NSError(domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue))
+        precondition(UpdateService.statusAfterUpdateError(noUpdate) == .upToDate,
+                     "A successful no-update check must not become a connection failure")
+        let networkFailure = NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)
+        precondition(UpdateService.statusAfterUpdateError(networkFailure) == .failed,
+                     "Network failures must remain failures")
+        let canceledUpdate = NSError(domain: SUSparkleErrorDomain, code: Int(SUError.installationCanceledError.rawValue))
+        precondition(UpdateService.statusAfterUpdateError(canceledUpdate) == .idle,
+                     "Canceling an update must not become a connection failure")
+#if DEBUG
+        let fixtureNotes = "<html><head><meta name=\"sensebar-version\" content=\"1.3.1\"></head><body><h2>Sửa lỗi</h2><ul><li>Nội dung kiểm thử.</li></ul></body></html>"
+        let fixtureData = try! JSONEncoder().encode(["1.3.1": fixtureNotes, "1.3.0": "# SenseBar 1.3.0\n"])
+        let decodedNotes = try! SenseBarUpdateUserDriver.previewNotes(version: "1.3.1", data: fixtureData)
+        let updatePreview = try! SenseBarUpdateUserDriver.previewFixture(version: "1.3.1", releaseNotes: decodedNotes)
+        precondition(updatePreview.0.itemDescription == fixtureNotes && updatePreview.0.itemDescriptionFormat == "html",
+                     "Sparkle preview must display exactly the styled HTML generated for production")
+        do {
+            _ = try SenseBarUpdateUserDriver.previewNotes(version: "9.9.9", data: fixtureData)
+            preconditionFailure("Missing preview notes must fail instead of showing sample content")
+        } catch {}
+        precondition(updatePreview.0.displayVersionString == "1.3.1")
+        precondition(updatePreview.0.fileURL?.host == "preview.invalid")
+        precondition(updatePreview.1.stage == .notDownloaded && updatePreview.1.userInitiated,
+                     "Preview must show the pre-download update prompt")
+#endif
         precondition(AudioTapEngine.validateRender(), "Audio render: boost ceiling, stereo, mute or unity failed")
         let batteryFixture = Data(#"{"SPBluetoothDataType":[{"device_connected":[{"My AirPods":{"device_address":"AA-BB-CC-DD-EE-FF","device_batteryLevelLeft":"73%","device_batteryLevelRight":64,"device_batteryLevelCase":"101%"}},{"Other mouse":{"device_address":"11-22-33-44-55-66","device_batteryLevelMain":"40%"}}]}]}"#.utf8)
         let battery = DeviceConnectionMonitor.battery(in: batteryFixture, address: "aa:bb:cc:dd:ee:ff")

@@ -2,8 +2,11 @@
 """Publish a signed Sparkle ZIP over SFTP; retain the two newest feed entries."""
 
 import copy
+import argparse
+import datetime
 import hashlib
 import html
+import json
 import shutil
 import os
 from pathlib import Path
@@ -19,6 +22,146 @@ BASE = "https://updates.sensebar.site"
 NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 ET.register_namespace("sparkle", NS)
 ZIP_NAME = re.compile(r"SenseBar-v\d+\.\d+\.\d+-macOS-Universal\.zip")
+
+
+def release_notes(version, changelog):
+    """Validate structured YAML and render only the requested version as Markdown."""
+    try:
+        import yaml
+    except ImportError as error:
+        raise RuntimeError("Install the release dependency: python3 -m pip install PyYAML==6.0.3") from error
+
+    class ChangelogLoader(yaml.SafeLoader):
+        def construct_mapping(self, node, deep=False):
+            result = {}
+            for key_node, value_node in node.value:
+                key = self.construct_object(key_node, deep=deep)
+                if not isinstance(key, str) or key in result:
+                    raise ValueError(f"changelog.yaml: invalid or duplicate field {key!r}")
+                result[key] = self.construct_object(value_node, deep=deep)
+            return result
+
+    data = yaml.load(changelog, Loader=ChangelogLoader)
+    if not isinstance(data, dict) or set(data) != {"releases"}:
+        raise ValueError("changelog.yaml must contain a 'releases' list")
+    releases = data["releases"]
+    if not isinstance(releases, list) or not releases:
+        raise ValueError("changelog.yaml releases must be a nonempty list")
+    labels = {"feature": "Tính năng mới", "improvement": "Cải thiện", "fix": "Sửa lỗi", "other": "Khác"}
+    versions = set()
+    selected = None
+    for release in releases:
+        if not isinstance(release, dict) or set(release) - {"version", "date", "changes"}:
+            raise ValueError("Each release must contain version, optional date, and changes")
+        release_version = release.get("version")
+        if not isinstance(release_version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", release_version):
+            raise ValueError("Each release version must be a quoted X.Y.Z string")
+        if release_version in versions:
+            raise ValueError(f"Duplicate release version: {release_version}")
+        versions.add(release_version)
+        date = release.get("date")
+        if date is not None:
+            if not isinstance(date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+                raise ValueError(f"{release_version}: date must be a quoted YYYY-MM-DD string")
+            datetime.date.fromisoformat(date)
+        changes = release.get("changes")
+        if not isinstance(changes, list) or not changes:
+            raise ValueError(f"{release_version}: changes must be a nonempty list")
+        for change in changes:
+            if not isinstance(change, dict) or set(change) != {"type", "text"}:
+                raise ValueError(f"{release_version}: each change must contain type and text")
+            if not isinstance(change["type"], str) or change["type"] not in labels:
+                raise ValueError(f"{release_version}: type must be feature, improvement, fix, or other")
+            if not isinstance(change["text"], str) or not change["text"].strip():
+                raise ValueError(f"{release_version}: change text must be nonempty")
+        if release_version == version:
+            selected = release
+    if selected is None:
+        raise ValueError(f"changelog.yaml has no notes for version {version}")
+    lines = [f"# SenseBar {version}", ""]
+    if selected.get("date"):
+        lines += [f"Ngày phát hành: {selected['date']}", ""]
+    for kind, title in labels.items():
+        entries = [change for change in selected["changes"] if change["type"] == kind]
+        if entries:
+            lines += [f"## {title}", ""]
+            lines += ["- " + " ".join(change["text"].split()) for change in entries]
+            lines.append("")
+    return "\n".join(lines)
+
+
+def prepare_release_notes(version):
+    notes = release_notes(version, Path("changelog.yaml").read_text(encoding="utf-8"))
+    Path("build").mkdir(exist_ok=True)
+    Path("build/RELEASE_NOTES.md").write_text(notes, encoding="utf-8")
+
+
+def sparkle_notes(version, notes):
+    """Compact HTML for Sparkle; keep full Markdown headings on GitHub only."""
+    heading, _, body = notes.partition("\n")
+    if heading != f"# SenseBar {version}" or not body.strip():
+        raise ValueError("Sparkle release notes must match the requested version")
+    content = []
+    in_list = False
+    for line in body.splitlines():
+        if not line.strip():
+            continue
+        if line.startswith("- "):
+            if not in_list:
+                content.append("<ul>")
+                in_list = True
+            content.append(f"<li>{html.escape(line[2:])}</li>")
+        else:
+            if in_list:
+                content.append("</ul>")
+                in_list = False
+            if line.startswith("## "):
+                content.append(f"<h2>{html.escape(line[3:])}</h2>")
+            else:
+                content.append(f"<p>{html.escape(line)}</p>")
+    if in_list:
+        content.append("</ul>")
+    return f'''<!doctype html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="sensebar-version" content="{html.escape(version, quote=True)}">
+<meta name="color-scheme" content="light dark">
+<style>
+:root {{ color-scheme: light dark; }}
+body {{ margin: 10px 12px; font: 13px/1.5 -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #252525; background: transparent; -webkit-text-size-adjust: 100%; }}
+h2 {{ font-size: 13px; font-weight: 600; line-height: 1.4; margin: 12px 0 5px; }}
+h2:first-child {{ margin-top: 0; }}
+ul {{ margin: 0 0 10px; padding-left: 18px; }}
+li {{ margin: 3px 0; }}
+p {{ margin: 0 0 8px; color: #626262; font-size: 12px; }}
+@media (prefers-color-scheme: dark) {{ body {{ color: #ededed; }} p {{ color: #b6b6b6; }} }}
+</style></head><body>
+{''.join(content)}
+</body></html>'''
+
+
+def prepare_preview_notes():
+    """Use the production renderer for every version offered by Debug preview."""
+    import yaml
+    source = Path("changelog.yaml").read_text(encoding="utf-8")
+    data = yaml.safe_load(source)
+    if not isinstance(data, dict) or not isinstance(data.get("releases"), list) or not data["releases"]:
+        raise ValueError("changelog.yaml must contain a nonempty releases list")
+    notes = {}
+    for release in data["releases"]:
+        version = release.get("version") if isinstance(release, dict) else None
+        notes[version] = sparkle_notes(version, release_notes(version, source))
+    Path("build").mkdir(exist_ok=True)
+    Path("build/UpdatePreviewNotes.json").write_text(
+        json.dumps(notes, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def verify_appcast_notes(item, notes):
+    description = item.find("description")
+    if (description is None or description.attrib.get(f"{{{NS}}}format", "html") != "html"
+            or (description.text or "").strip() != notes.strip()):
+        raise ValueError("Generated appcast release notes do not match changelog.yaml output; refusing upload")
 
 
 def fetch(url):
@@ -48,6 +191,11 @@ def main():
     archive = Path(f"build/SenseBar-v{version}-macOS-Universal.zip")
     if not ZIP_NAME.fullmatch(archive.name):
         raise ValueError("Unexpected ZIP filename")
+    notes = Path("build/RELEASE_NOTES.md").read_text(encoding="utf-8")
+    heading, _, body = notes.partition("\n")
+    if heading.strip() != f"# SenseBar {version}" or not body.strip():
+        raise ValueError("Release notes must match the app version and describe changes for users")
+    display_notes = sparkle_notes(version, notes)
 
     try:
         previous = ET.fromstring(fetch(BASE + "/appcast.xml"))
@@ -90,8 +238,7 @@ def main():
         for old in retained:
             channel.append(copy.deepcopy(old))
         ET.ElementTree(rss).write(staging / "appcast.xml", encoding="utf-8", xml_declaration=True)
-        notes = html.escape(Path("build/RELEASE_NOTES.md").read_text())
-        (staging / archive.with_suffix(".html").name).write_text("<pre>" + notes + "</pre>")
+        (staging / archive.with_suffix(".html").name).write_text(display_notes, encoding="utf-8")
         subprocess.run([
             str(tools / "generate_appcast"), "--ed-key-file", "-",
             "--download-url-prefix", BASE + "/releases/",
@@ -104,6 +251,7 @@ def main():
     if len(items) != 1 + len(retained):
         raise ValueError("Unexpected number of generated feed entries")
     current = next(item for item in items if item.findtext(f"{{{NS}}}version") == str(build))
+    verify_appcast_notes(current, display_notes)
     enclosure = current.find("enclosure")
     if enclosure.attrib["url"] != f"{BASE}/releases/{archive.name}":
         raise ValueError("Unexpected generated download URL")
@@ -142,4 +290,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--prepare-notes", metavar="VERSION", help="Generate user-facing notes from changelog.yaml")
+    mode.add_argument("--prepare-preview-notes", action="store_true", help="Generate Debug preview notes using the same renderer")
+    arguments = parser.parse_args()
+    if arguments.prepare_notes:
+        prepare_release_notes(arguments.prepare_notes)
+    elif arguments.prepare_preview_notes:
+        prepare_preview_notes()
+    else:
+        main()

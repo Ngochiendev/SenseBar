@@ -25,7 +25,7 @@ jobs:
           xcode-version: "26.2"
 
       - name: Verify UI build toolchain
-        shell: zsh {0}
+        shell: bash
         run: |
           set -euo pipefail
           xcodebuild -version
@@ -44,8 +44,9 @@ jobs:
 
       - name: Đọc Version từ Info.plist & Xác định Tag
         id: meta
-        shell: zsh {0}
+        shell: bash
         run: |
+          set -euo pipefail
           VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
           TAG="v${VERSION}"
 
@@ -59,14 +60,29 @@ jobs:
           echo "should_release=true" >> "$GITHUB_OUTPUT"
           echo "▸ Target Version: $VERSION -> Tag: $TAG (Release: true)"
 
+      - name: Prepare user-facing release notes
+        if: steps.meta.outputs.should_release == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/sensebar-release-python"
+          "$RUNNER_TEMP/sensebar-release-python/bin/python" -m pip install 'PyYAML==6.0.3'
+          "$RUNNER_TEMP/sensebar-release-python/bin/python" Tools/publish-updates.py --prepare-notes "$RELEASE_VERSION"
+          echo "$RUNNER_TEMP/sensebar-release-python/bin" >> "$GITHUB_PATH"
+
       - name: Nhập chứng chỉ Apple Developer ID
-        if: ${{ steps.meta.outputs.should_release == 'true' && env.APPLE_CERTIFICATE_BASE64 != '' }}
+        if: steps.meta.outputs.should_release == 'true'
         env:
           APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD || 'sensebar-temp-keychain' }}
-        shell: zsh {0}
+        shell: bash
         run: |
+          set -euo pipefail
+          test -n "$APPLE_CERTIFICATE_BASE64"
+          test -n "$APPLE_CERTIFICATE_PASSWORD"
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
@@ -75,7 +91,7 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security set-keychain-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
           rm -f "$CERTIFICATE_PATH"
 
@@ -110,33 +126,33 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        shell: zsh {0}
+        shell: bash
         run: |
-          xcodebuild -version
-          swift --version
-          xcrun --show-sdk-version
+          set -euo pipefail
           chmod +x build-app.sh
           ./build-app.sh --dmg
 
       - name: Xóa Keychain tạm
         if: ${{ always() && steps.meta.outputs.should_release == 'true' }}
-        shell: zsh {0}
+        shell: bash
         run: |
           security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/build_certificate.p12" "$RUNNER_TEMP/app-signing.keychain-db"
 
       - name: Chạy kiểm thử tự động (--selftest)
         if: steps.meta.outputs.should_release == 'true'
-        shell: zsh {0}
+        shell: bash
         run: |
+          set -euo pipefail
           ./build/SenseBar.app/Contents/MacOS/SenseBar --selftest
-          lipo -info build/SenseBar.app/Contents/MacOS/SenseBar
-          lipo -info build/SenseBar.app/Contents/Frameworks/libSenseBarNowPlaying.dylib
+          lipo -verify_arch arm64 x86_64 build/SenseBar.app/Contents/MacOS/SenseBar
+          lipo -verify_arch arm64 x86_64 build/SenseBar.app/Contents/Frameworks/libSenseBarNowPlaying.dylib
 
       - name: Đóng gói file phát hành (DMG, ZIP & SHA256)
         if: steps.meta.outputs.should_release == 'true'
-        shell: zsh {0}
+        shell: bash
         run: |
+          set -euo pipefail
           TAG="${{ steps.meta.outputs.tag }}"
           DMG_NAME="SenseBar-${TAG}-macOS-Universal.dmg"
           ZIP_NAME="SenseBar-${TAG}-macOS-Universal.zip"
@@ -148,32 +164,10 @@ jobs:
           shasum -a 256 "${DMG_NAME}" "${ZIP_NAME}" > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Tạo Release Notes tự động từ danh sách Commit
-        if: steps.meta.outputs.should_release == 'true'
-        shell: zsh {0}
-        run: |
-          TAG="${{ steps.meta.outputs.tag }}"
-          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${TAG}$" | head -n 1 || true)
-
-          if [[ -n "$PREV_TAG" ]]; then
-            RANGE="${PREV_TAG}..HEAD"
-            HEADER="## Thay đổi trong phiên bản ${TAG} (so với ${PREV_TAG})"
-          else
-            RANGE="HEAD"
-            HEADER="## Thay đổi trong phiên bản ${TAG}"
-          fi
-
-          {
-            echo "$HEADER"
-            echo ""
-            git log $RANGE --no-merges --pretty=format:"### %s (\`%h\`)%n%b"
-          } > build/RELEASE_NOTES.md
-
-          cat build/RELEASE_NOTES.md
-
       - name: Publish Sparkle update and retain two versions
         if: steps.meta.outputs.should_release == 'true'
         env:
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_PORT: ${{ secrets.SFTP_PORT }}
@@ -184,6 +178,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          for name in SPARKLE_PRIVATE_KEY SFTP_HOST SFTP_PORT SFTP_USER SFTP_REMOTE_DIR SFTP_PRIVATE_KEY SFTP_KNOWN_HOSTS; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing repository secret: $name"
+              exit 1
+            fi
+          done
           install -d -m 0700 "$HOME/.ssh"
           (umask 077; printf '%s\n' "$SFTP_PRIVATE_KEY" > "$HOME/.ssh/sensebar_deploy")
           (umask 077; printf '%s\n' "$SFTP_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts")

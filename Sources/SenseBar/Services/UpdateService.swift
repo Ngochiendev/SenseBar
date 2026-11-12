@@ -33,7 +33,10 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
         return nil
     }
 
-    private var controller: SPUStandardUpdaterController?
+    private var updater: SPUUpdater?
+#if DEBUG
+    private var previewDriver: SenseBarUpdateUserDriver?
+#endif
 
     private override init() {
         super.init()
@@ -44,36 +47,44 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
 
     /// Khởi động kiểm tra cập nhật tự động khi mở ứng dụng và định kỳ mỗi 24 giờ.
     func start() {
+        if showUpdatePreviewIfRequested() { return }
         if applySimulatedUpdateIfRequested() { return }
 
-        guard controller == nil else { return }
+        guard updater == nil else { return }
         guard let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
               Data(base64Encoded: key)?.count == 32 else {
             status = .failed
             return
         }
-        let controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil)
-        self.controller = controller
-        controller.updater.automaticallyChecksForUpdates = UserDefaults.standard.bool(forKey: DefaultsKey.autoCheckUpdates)
-        controller.startUpdater()
+        let driver = SenseBarUpdateUserDriver(hostBundle: .main, delegate: nil)
+        let updater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: self)
+        self.updater = updater
+        updater.automaticallyChecksForUpdates = UserDefaults.standard.bool(forKey: DefaultsKey.autoCheckUpdates)
+        do {
+            try updater.start()
+        } catch {
+            self.updater = nil
+            status = .failed
+        }
     }
 
     func setAutomaticChecks(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: DefaultsKey.autoCheckUpdates)
-        controller?.updater.automaticallyChecksForUpdates = enabled
+        updater?.automaticallyChecksForUpdates = enabled
     }
 
     /// Kiểm tra và cài cập nhật qua Sparkle từ appcast HTTPS.
     /// - Parameter manual: `true` nếu người dùng chủ động bấm nút kiểm tra.
     func checkForUpdates(manual: Bool = false) {
+        if showUpdatePreviewIfRequested() { return }
         if applySimulatedUpdateIfRequested() { return }
-        if controller == nil { start() }
-        guard let controller, controller.updater.canCheckForUpdates else { return }
+        if updater == nil { start() }
+        guard let updater, updater.canCheckForUpdates else { return }
         if manual {
             status = .checking
-            controller.checkForUpdates(nil)
+            updater.checkForUpdates()
         } else {
-            controller.updater.checkForUpdatesInBackground()
+            updater.checkForUpdatesInBackground()
         }
     }
 
@@ -87,11 +98,32 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
-        status = .failed
+        status = Self.statusAfterUpdateError(error)
     }
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
-        if status == .checking { status = error == nil ? .idle : .failed }
+        if let error {
+            status = Self.statusAfterUpdateError(error)
+        } else if status == .checking {
+            status = .idle
+        }
+    }
+
+    /// Sparkle kết thúc cả trường hợp không có bản mới bằng một NSError.
+    static func statusAfterUpdateError(_ error: Error) -> Status {
+        let error = error as NSError
+        if error.domain == SUSparkleErrorDomain {
+            switch error.code {
+            case Int(SUError.noUpdateError.rawValue):
+                return .upToDate
+            case Int(SUError.installationCanceledError.rawValue),
+                 Int(SUError.installationAuthorizeLaterError.rawValue):
+                return .idle
+            default:
+                break
+            }
+        }
+        return .failed
     }
 
     /// Hiển thị trạng thái có bản cập nhật trong debug build mà không truy cập GitHub.
@@ -113,6 +145,29 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
                 dmgDownloadURL: nil
             )
         )
+        return true
+#else
+        return false
+#endif
+    }
+
+    /// Mở UI thật bằng release notes sinh từ changelog, không khởi tạo tải/cài.
+    private func showUpdatePreviewIfRequested() -> Bool {
+#if DEBUG
+        let arguments = CommandLine.arguments
+        guard let index = arguments.firstIndex(of: "--preview-update") else { return false }
+        guard previewDriver == nil else { return true }
+        let next = arguments.index(after: index)
+        let version = arguments.indices.contains(next) && !arguments[next].hasPrefix("--")
+            ? Self.normalizeVersion(arguments[next]) : "9.9.9"
+        let driver = SenseBarUpdateUserDriver(hostBundle: .main, delegate: nil)
+        previewDriver = driver
+        status = .updateAvailable(ReleaseInfo(version: version, htmlURL: URL(string: "https://sensebar.site")!, dmgDownloadURL: nil))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            driver.showUpdatePreview(version: version) {
+                self?.previewDriver = nil
+            }
+        }
         return true
 #else
         return false
