@@ -1,0 +1,62 @@
+name: Test SenseBar Update SFTP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-sftp:
+    name: Upload test file and verify HTTPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env:
+          SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SFTP_PRIVATE_KEY" > "$HOME/.ssh/sensebar_deploy"
+          printf '%s\n' "$SFTP_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/sensebar_deploy" "$HOME/.ssh/known_hosts"
+
+      - name: Upload test file through SFTP
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_FILE="$RUNNER_TEMP/github-actions-test.txt"
+          printf 'SenseBar GitHub Actions SFTP OK\n' > "$TEST_FILE"
+
+          sftp \
+            -b - \
+            -P "$SFTP_PORT" \
+            -i "$HOME/.ssh/sensebar_deploy" \
+            "$SFTP_USER@$SFTP_HOST" <<EOF
+          put "$TEST_FILE" "$SFTP_REMOTE_DIR/github-actions-test.txt"
+          EOF
+
+      - name: Verify public HTTPS download
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://updates.sensebar.site/releases/github-actions-test.txt"
+
+          for attempt in {1..5}; do
+            BODY="$(curl --fail --silent --show-error "$URL")" && break
+            if [[ "$attempt" == 5 ]]; then
+              echo "::error::Unable to download $URL"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          test "$BODY" = "SenseBar GitHub Actions SFTP OK"
+          echo "SFTP upload and HTTPS download succeeded: $URL"
