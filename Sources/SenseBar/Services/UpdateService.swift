@@ -34,6 +34,14 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
         return nil
     }
 
+    var bannerRelease: ReleaseInfo? {
+        guard let release = availableRelease,
+              dismissedBannerVersion != release.version else {
+            return nil
+        }
+        return release
+    }
+
     private var updater: SPUUpdater?
     private var wakeObserver: NSObjectProtocol?
     private var lastProbeDate: Date?
