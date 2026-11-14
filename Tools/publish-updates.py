@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish a signed Sparkle ZIP over SFTP; retain the two newest feed entries."""
+"""Publish a signed Sparkle ZIP and web DMG over SFTP; retain the two newest versions."""
 
 import copy
 import argparse
@@ -22,6 +22,7 @@ BASE = "https://updates.sensebar.site"
 NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 ET.register_namespace("sparkle", NS)
 ZIP_NAME = re.compile(r"SenseBar-v\d+\.\d+\.\d+-macOS-Universal\.zip")
+DMG_NAME = re.compile(r"SenseBar-v\d+\.\d+\.\d+-macOS-Universal\.dmg")
 
 
 def release_notes(version, changelog):
@@ -170,6 +171,36 @@ def fetch(url):
         return response.read()
 
 
+def sha256_digest(path):
+    """Compute the SHA-256 digest of a file without loading large binaries into memory."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.digest()
+
+
+def upload_and_verify_asset(path, remote):
+    """Upload a release asset atomically via SFTP and verify its public HTTPS SHA-256."""
+    sftp([
+        f'put "{path.resolve()}" "{remote}/{path.name}.uploading"',
+        f'rename "{remote}/{path.name}.uploading" "{remote}/{path.name}"',
+    ])
+    expected = sha256_digest(path)
+    request = urllib.request.Request(
+        f"{BASE}/releases/{path.name}",
+        headers={"Cache-Control": "no-cache"},
+    )
+    actual = hashlib.sha256()
+    with urllib.request.urlopen(request, timeout=120) as response:
+        for chunk in iter(lambda: response.read(1024 * 1024), b""):
+            actual.update(chunk)
+    if actual.digest() != expected:
+        kind = path.suffix.lstrip(".").upper() or "asset"
+        raise ValueError(
+            f"Public {kind} checksum mismatch; leaving current feed and archives intact"
+        )
+
 def sftp(commands):
     result = subprocess.run([
         "sftp", "-b", "-", "-P", os.environ["SFTP_PORT"],
@@ -189,8 +220,14 @@ def main():
     version = info["CFBundleShortVersionString"]
     build = int(info["CFBundleVersion"])
     archive = Path(f"build/SenseBar-v{version}-macOS-Universal.zip")
+    dmg_archive = Path(f"build/SenseBar-v{version}-macOS-Universal.dmg")
     if not ZIP_NAME.fullmatch(archive.name):
         raise ValueError("Unexpected ZIP filename")
+    if not DMG_NAME.fullmatch(dmg_archive.name):
+        raise ValueError("Unexpected DMG filename")
+    for asset in (archive, dmg_archive):
+        if not asset.is_file():
+            raise ValueError(f"Missing release asset: {asset}")
     notes = Path("build/RELEASE_NOTES.md").read_text(encoding="utf-8")
     heading, _, body = notes.partition("\n")
     if heading.strip() != f"# SenseBar {version}" or not body.strip():
@@ -210,13 +247,14 @@ def main():
     if old_items and int(old_items[0].findtext(f"{{{NS}}}version")) >= build:
         raise ValueError("Feed build must increase; refusing an overwrite or downgrade")
     retained = old_items[:1]
-    keep = {archive.name}
+    keep = {archive.name, dmg_archive.name}
     for item in retained:
         enclosure = item.find("enclosure")
         name = enclosure.attrib["url"].removeprefix(BASE + "/releases/")
         if not ZIP_NAME.fullmatch(name):
             raise ValueError("Unexpected existing feed enclosure URL")
         keep.add(name)
+        keep.add(Path(name).with_suffix(".dmg").name)
         # Confirm the fallback archive is still available before publishing it.
         request = urllib.request.Request(enclosure.attrib["url"], method="HEAD")
         with urllib.request.urlopen(request, timeout=30):
@@ -261,28 +299,20 @@ def main():
         "swift", "-", info["SUPublicEDKey"], enclosure.attrib[f"{{{NS}}}edSignature"], str(archive),
     ], input="import CryptoKit\nimport Foundation\n\n// Verify the generated archive signature against the key shipped in Info.plist.\nlet arguments = CommandLine.arguments\nguard arguments.count == 4,\n      let publicKey = Data(base64Encoded: arguments[1]),\n      let signature = Data(base64Encoded: arguments[2]) else {\n    fatalError(\"Expected public key, signature, archive path\")\n}\nlet key = try Curve25519.Signing.PublicKey(rawRepresentation: publicKey)\nlet archive = try Data(contentsOf: URL(fileURLWithPath: arguments[3]), options: .mappedIfSafe)\nguard key.isValidSignature(signature, for: archive) else {\n    fatalError(\"Sparkle signing key does not match the app's SUPublicEDKey\")\n}\nprint(\"Sparkle EdDSA signature verified\")\n", text=True, check=True)
 
-    # Upload to temporary names, then rename within the same filesystem.
-    sftp([f'put "{archive.resolve()}" "{remote}/{archive.name}.uploading"',
-          f'rename "{remote}/{archive.name}.uploading" "{remote}/{archive.name}"'])
-    expected = hashlib.sha256(archive.read_bytes()).digest()
-    request = urllib.request.Request(f"{BASE}/releases/{archive.name}")
-    actual = hashlib.sha256()
-    with urllib.request.urlopen(request, timeout=120) as response:
-        for chunk in iter(lambda: response.read(1024 * 1024), b""):
-            actual.update(chunk)
-    if actual.digest() != expected:
-        raise ValueError("Public ZIP checksum mismatch; leaving current feed and archives intact")
+    # Upload Sparkle ZIP and web DMG via temporary names before updating appcast.xml.
+    upload_and_verify_asset(archive, remote)
+    upload_and_verify_asset(dmg_archive, remote)
     sftp([f'put "{feed.resolve()}" "/public/appcast.xml.uploading"',
           'rename "/public/appcast.xml.uploading" "/public/appcast.xml"'])
     if fetch(BASE + "/appcast.xml") != feed.read_bytes():
         raise ValueError("Public feed mismatch; skipping cleanup")
 
-    # Only delete exact SenseBar ZIP names after BOTH public downloads verify.
+    # Only delete exact SenseBar ZIP/DMG names after all public downloads verify.
     listing = sftp([f'ls -1 "{remote}"'])
     remove = []
     for line in listing.splitlines():
         name = line.strip().removeprefix(remote + "/")
-        if ZIP_NAME.fullmatch(name) and name not in keep:
+        if (ZIP_NAME.fullmatch(name) or DMG_NAME.fullmatch(name)) and name not in keep:
             remove.append(f'rm "{remote}/{name}"')
     if remove:
         sftp(remove)

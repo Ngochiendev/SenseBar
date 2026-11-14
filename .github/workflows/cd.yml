@@ -164,7 +164,7 @@ jobs:
           shasum -a 256 "${DMG_NAME}" "${ZIP_NAME}" > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Publish Sparkle update and retain two versions
+      - name: Publish Sparkle ZIP & web DMG updates and retain two versions
         if: steps.meta.outputs.should_release == 'true'
         env:
           SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
