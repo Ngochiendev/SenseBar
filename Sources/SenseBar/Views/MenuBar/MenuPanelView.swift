@@ -98,12 +98,18 @@ struct MenuPanelView: View {
         .onAppear {
             permissions.refreshStatus()
             audio.refreshAll()
+            updateService.probeForUpdateIfNeeded()
         }
     }
 
     private var mainControlsView: some View {
         VStack(spacing: 10) {
             topHeaderBar
+
+            if let release = updateService.bannerRelease {
+                updateAvailableBanner(release)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
 
             if !permissions.allRequiredGranted {
                 permissionWarningBanner
@@ -164,6 +170,65 @@ struct MenuPanelView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 2)
+    }
+
+    // MARK: - Thông báo bản cập nhật mới
+
+    private func updateAvailableBanner(_ release: UpdateService.ReleaseInfo) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(Color.blue)
+
+            Text(l10n.string(
+                vi: "Đã có SenseBar v\(release.version) mới",
+                en: "SenseBar v\(release.version) is available"
+            ))
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            Button {
+                updateService.openDownloadPage()
+            } label: {
+                Text(l10n.string(vi: "Cập nhật", en: "Update"))
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3.5)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.blue)
+                    )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    updateService.dismissBanner(for: release.version)
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(l10n.string(vi: "Ẩn thông báo này", en: "Dismiss banner"))
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Color.blue.opacity(0.09))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .strokeBorder(Color.blue.opacity(0.24), lineWidth: 0.8)
+                )
+        )
     }
 
     // MARK: - Cảnh báo quyền Trợ năng

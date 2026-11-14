@@ -25,6 +25,7 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
     }
 
     @Published private(set) var status: Status = .idle
+    @Published private(set) var dismissedBannerVersion: String?
 
     var availableRelease: ReleaseInfo? {
         if case .updateAvailable(let info) = status {
@@ -34,6 +35,10 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
     }
 
     private var updater: SPUUpdater?
+    private var wakeObserver: NSObjectProtocol?
+    private var lastProbeDate: Date?
+    private var isManualCheckInFlight = false
+    private let probeCooldown: TimeInterval = 15 * 60
 #if DEBUG
     private var previewDriver: SenseBarUpdateUserDriver?
 #endif
@@ -45,7 +50,7 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
         ])
     }
 
-    /// Khởi động kiểm tra cập nhật tự động khi mở ứng dụng và định kỳ mỗi 24 giờ.
+    /// Khởi động kiểm tra cập nhật tự động khi mở ứng dụng, khi thức dậy từ Sleep và định kỳ mỗi 1 giờ.
     func start() {
         if showUpdatePreviewIfRequested() { return }
         if applySimulatedUpdateIfRequested() { return }
@@ -59,18 +64,64 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
         let driver = SenseBarUpdateUserDriver(hostBundle: .main, delegate: nil)
         let updater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: self)
         self.updater = updater
-        updater.automaticallyChecksForUpdates = UserDefaults.standard.bool(forKey: DefaultsKey.autoCheckUpdates)
+        let autoEnabled = UserDefaults.standard.bool(forKey: DefaultsKey.autoCheckUpdates)
+        updater.automaticallyChecksForUpdates = autoEnabled
         do {
             try updater.start()
+            registerWakeObserverIfNeeded()
+            if autoEnabled {
+                lastProbeDate = Date()
+                updater.checkForUpdatesInBackground()
+            }
         } catch {
             self.updater = nil
             status = .failed
         }
     }
 
+    private func registerWakeObserverIfNeeded() {
+        guard wakeObserver == nil else { return }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                Task { @MainActor in
+                    self?.probeForUpdateIfNeeded()
+                }
+            }
+        }
+    }
+
     func setAutomaticChecks(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: DefaultsKey.autoCheckUpdates)
         updater?.automaticallyChecksForUpdates = enabled
+        if enabled {
+            probeForUpdateIfNeeded(force: true)
+        }
+    }
+
+    /// Thăm dò nhẹ `appcast.xml` ở nền (không bật popup làm phiền) với cooldown 15 phút.
+    func probeForUpdateIfNeeded(force: Bool = false) {
+        if showUpdatePreviewIfRequested() { return }
+        if applySimulatedUpdateIfRequested() { return }
+        guard UserDefaults.standard.bool(forKey: DefaultsKey.autoCheckUpdates) else { return }
+        if updater == nil {
+            start()
+            return
+        }
+        guard let updater, !updater.sessionInProgress, updater.canCheckForUpdates else { return }
+        if !force, let lastProbeDate, Date().timeIntervalSince(lastProbeDate) < probeCooldown {
+            return
+        }
+        lastProbeDate = Date()
+        isManualCheckInFlight = false
+        updater.checkForUpdateInformation()
+    }
+
+    func dismissBanner(for version: String) {
+        dismissedBannerVersion = version
     }
 
     /// Kiểm tra và cài cập nhật qua Sparkle từ appcast HTTPS.
@@ -80,16 +131,23 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
         if applySimulatedUpdateIfRequested() { return }
         if updater == nil { start() }
         guard let updater, updater.canCheckForUpdates else { return }
+        lastProbeDate = Date()
         if manual {
+            isManualCheckInFlight = true
             status = .checking
             updater.checkForUpdates()
         } else {
+            isManualCheckInFlight = false
             updater.checkForUpdatesInBackground()
         }
     }
 
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
-        status = .updateAvailable(ReleaseInfo(version: item.displayVersionString,
+        let newVersion = Self.normalizeVersion(item.displayVersionString)
+        if dismissedBannerVersion != nil && dismissedBannerVersion != newVersion {
+            dismissedBannerVersion = nil
+        }
+        status = .updateAvailable(ReleaseInfo(version: newVersion.isEmpty ? item.displayVersionString : newVersion,
             htmlURL: item.releaseNotesURL ?? URL(string: "https://sensebar.site")!, dmgDownloadURL: nil))
     }
 
@@ -98,15 +156,26 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
-        status = Self.statusAfterUpdateError(error)
+        applyErrorStatus(error)
     }
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
+        defer { isManualCheckInFlight = false }
         if let error {
-            status = Self.statusAfterUpdateError(error)
+            applyErrorStatus(error)
         } else if status == .checking {
             status = .idle
         }
+    }
+
+    private func applyErrorStatus(_ error: Error) {
+        let nextStatus = Self.statusAfterUpdateError(error)
+        if nextStatus == .failed && !isManualCheckInFlight {
+            if case .updateAvailable = status { return }
+            status = .idle
+            return
+        }
+        status = nextStatus
     }
 
     /// Sparkle kết thúc cả trường hợp không có bản mới bằng một NSError.
@@ -175,6 +244,7 @@ final class UpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
     }
 
     func openDownloadPage() {
+        NSApp.activate(ignoringOtherApps: true)
         checkForUpdates(manual: true)
     }
 

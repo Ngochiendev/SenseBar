@@ -1,15 +1,19 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
 final class MenuBarController: NSObject, NSPopoverDelegate {
     private var statusItem: NSStatusItem?
+    private var badgeDotView: NSView?
+    private var statusCancellable: AnyCancellable?
     private let popover = NSPopover()
 
     override init() {
         super.init()
         setupPopover()
         setupStatusItem()
+        observeUpdateStatus()
     }
 
     private func setupPopover() {
@@ -31,9 +35,51 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             button.target = self
             button.action = #selector(handleStatusBarClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+
+            let dot = MenuBarUpdateBadgeView()
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            dot.isHidden = true
+            button.addSubview(dot)
+            NSLayoutConstraint.activate([
+                dot.widthAnchor.constraint(equalToConstant: 7),
+                dot.heightAnchor.constraint(equalToConstant: 7),
+                dot.topAnchor.constraint(equalTo: button.topAnchor, constant: 2.5),
+                dot.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -3.5)
+            ])
+            badgeDotView = dot
         }
 
         statusItem = item
+        syncUpdateBadge(status: UpdateService.shared.status)
+    }
+
+    private func observeUpdateStatus() {
+        statusCancellable = UpdateService.shared.$status
+            .receive(on: RunLoop.main)
+            .sink { [weak self] status in
+                self?.syncUpdateBadge(status: status)
+            }
+    }
+
+    private func syncUpdateBadge(status: UpdateService.Status) {
+        let release: UpdateService.ReleaseInfo?
+        if case .updateAvailable(let info) = status {
+            release = info
+        } else {
+            release = nil
+        }
+
+        badgeDotView?.isHidden = (release == nil)
+        if let button = statusItem?.button {
+            if let release {
+                button.toolTip = L10n.shared.string(
+                    vi: "SenseBar — Có bản cập nhật v\(release.version)",
+                    en: "SenseBar — Update v\(release.version) available"
+                )
+            } else {
+                button.toolTip = L10n.shared.s.menuBarTooltip
+            }
+        }
     }
 
     @objc private func handleStatusBarClick(_ sender: NSStatusBarButton) {
@@ -68,6 +114,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+        UpdateService.shared.probeForUpdateIfNeeded()
     }
 
     func closePopover() {
@@ -90,6 +137,20 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
         let s = L10n.shared.s
         let menu = NSMenu()
+
+        if let release = UpdateService.shared.availableRelease {
+            let updateItem = NSMenuItem(
+                title: L10n.shared.string(
+                    vi: "Cập nhật lên v\(release.version)...",
+                    en: "Update to v\(release.version)..."
+                ),
+                action: #selector(installUpdateAction),
+                keyEquivalent: ""
+            )
+            updateItem.target = self
+            menu.addItem(updateItem)
+            menu.addItem(.separator())
+        }
 
         let panelItem = NSMenuItem(
             title: s.menuOpenPanel,
@@ -144,7 +205,28 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         showPopover()
     }
 
+    @objc private func installUpdateAction() {
+        UpdateService.shared.openDownloadPage()
+    }
+
     @objc private func quitAction() {
         NSApplication.shared.terminate(nil)
+    }
+}
+
+/// Chấm tròn thông báo có bản cập nhật mới gắn ở góc trên-phải của biểu tượng Menu Bar.
+private final class MenuBarUpdateBadgeView: NSView {
+    override var allowsVibrancy: Bool { false }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        let dotRect = bounds.insetBy(dx: 0.75, dy: 0.75)
+        let path = NSBezierPath(ovalIn: dotRect)
+        NSColor.systemBlue.setFill()
+        path.fill()
     }
 }
