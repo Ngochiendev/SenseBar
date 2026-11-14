@@ -3,6 +3,13 @@
 # version luôn là chuỗi "X.Y.Z"; date tùy chọn, dùng chuỗi "YYYY-MM-DD".
 releases:
   # Đang chuẩn bị, chưa phát hành.
+  - version: "1.3.4"
+    changes:
+      - type: improvement
+        text: "Hiển thị ảnh động minh họa Dynamic Island thực tế ngay trong bảng điều khiển."
+      - type: fix
+        text: "Khắc phục thanh sóng nhạc trên Dynamic Island bị tai thỏ che khuất khi mở rộng trên MacBook."
+
   - version: "1.3.3"
     changes:
       - type: improvement

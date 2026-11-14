@@ -515,7 +515,7 @@ struct IslandView: View {
                     .fill((music.track?.isPlaying == true) ? Color.green : Color.white.opacity(0.35))
                     .frame(width: 6, height: 6)
                 Text(music.sourceDisplayName)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.82))
                     .lineLimit(1)
             }
@@ -587,15 +587,6 @@ struct IslandView: View {
                 .help(music.preferredSource == "auto"
                     ? l10n.string(vi: "Nguồn phát: Tự động", en: "Media Source: Automatic")
                     : l10n.string(vi: "Đã ghim nguồn phát: \(music.sourceDisplayName)", en: "Pinned Source: \(music.sourceDisplayName)"))
-
-                Button {
-                    controller.collapse()
-                } label: {
-                    Image(systemName: "chevron.up.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                .buttonStyle(.plain)
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }

@@ -132,13 +132,27 @@ enum BrandIconResources {
             return bundleURL
         }
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
         let candidates = [
             cwd.appendingPathComponent("Resources/Icons/\(filename)"),
             cwd.appendingPathComponent("Resources/Brand/\(filename)"),
             cwd.appendingPathComponent("build/\(filename)"),
-            cwd.appendingPathComponent("Resources/\(filename)")
+            cwd.appendingPathComponent("Resources/\(filename)"),
+            cwd.appendingPathComponent("assets/\(filename)"),
+            repoRoot.appendingPathComponent("assets/\(filename)"),
+            repoRoot.appendingPathComponent("Resources/\(filename)")
         ]
         return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    /// Trả về đường dẫn file GIF minh họa Dynamic Island (Notch hoặc Capsule).
+    static func previewGIFURL(isCapsule: Bool) -> URL? {
+        let filename = isCapsule ? "dynamic-island-capsule.gif" : "dynamic-island-notch.gif"
+        return findResourceURL(named: filename)
     }
 
     /// Đọc và trả về NSImage từ file SVG 

@@ -93,6 +93,7 @@ SPARKLE_FRAMEWORK=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-ar
 ditto "$SPARKLE_FRAMEWORK" "$STAGE/Contents/Frameworks/Sparkle.framework"
 cp build/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
 cp build/MenuBarIcon.png build/MenuBarIcon@2x.png build/BrandMark.png "$STAGE/Contents/Resources/"
+cp assets/dynamic-island-notch.gif assets/dynamic-island-capsule.gif "$STAGE/Contents/Resources/" 2>/dev/null || true
 find Resources -name "*.svg" -exec cp {} "$STAGE/Contents/Resources/" \; 2>/dev/null || true
 cp Resources/Info.plist "$STAGE/Contents/Info.plist"
 if [[ "$PREVIEW_UPDATES" -eq 1 ]]; then
