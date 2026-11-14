@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "Resources/Info.plist"
   workflow_dispatch:
 
 permissions:
@@ -18,6 +20,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     name: Build Signed DMG & Release
     runs-on: macos-26
+    timeout-minutes: 15
     steps:
       - name: Select Xcode 26.2 (match local UI SDK)
         uses: maxim-lobanov/setup-xcode@v1

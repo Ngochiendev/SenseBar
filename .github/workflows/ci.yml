@@ -5,14 +5,16 @@ on:
     branches:
       - main
       - dev
-  push:
-    branches:
-      - dev
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
-    name: Build Universal & Run Selftest
+    name: Build & Run Selftest
     runs-on: macos-26
+    timeout-minutes: 10
     steps:
       - name: Select Xcode 26.2 (match local UI SDK)
         uses: maxim-lobanov/setup-xcode@v1
@@ -35,19 +37,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build SenseBar Universal (arm64 + x86_64)
+      - name: Build SenseBar Native (arm64)
         shell: zsh {0}
         run: |
           chmod +x build-app.sh
-          ./build-app.sh
+          ./build-app.sh --native
 
       - name: Chạy kiểm thử tự động (--selftest)
         shell: zsh {0}
         run: |
           ./build/SenseBar.app/Contents/MacOS/SenseBar --selftest
-
-      - name: Kiểm tra Universal Binary (arm64 + x86_64)
-        shell: zsh {0}
-        run: |
-          lipo -info build/SenseBar.app/Contents/MacOS/SenseBar
-          lipo -info build/SenseBar.app/Contents/Frameworks/libSenseBarNowPlaying.dylib
