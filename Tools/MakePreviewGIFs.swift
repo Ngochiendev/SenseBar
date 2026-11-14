@@ -1,11 +1,7 @@
 import AppKit
-import CoreGraphics
-import Foundation
-import ImageIO
 import SwiftUI
+import ImageIO
 import UniformTypeIdentifiers
-
-// MARK: - NotchAttachedShape (y hệt trong NotchDynamicIslandView.swift)
 
 struct NotchAttachedShape: Shape {
     var topShoulder: CGFloat
@@ -47,354 +43,228 @@ struct NotchAttachedShape: Shape {
     }
 }
 
-// MARK: - Sóng nhạc từng frame (y hệt SenseEqualizerBars)
 
-struct FrameEqualizerBars: View {
-    let bars: Int
-    let barWidth: CGFloat
-    let height: CGFloat
-    let phase: Double
-    let tint: Color
+private let accent = Color(red: 0.44, green: 0.62, blue: 0.88)
 
+// Sample the same decorative envelope as EqualizerBars, at a fixed time per frame.
+struct FrameBars: View {
+    let time: Double
+    var width: CGFloat = 1.8
     var body: some View {
-        HStack(alignment: .center, spacing: max(1.6, barWidth * 0.82)) {
-            ForEach(0..<bars, id: \.self) { idx in
-                let wave = (sin(phase * 6.2 + Double(idx) * 1.15) + 1.0) * 0.5
-                let wave2 = (cos(phase * 4.5 - Double(idx) * 0.85) + 1.0) * 0.5
-                let level = max(0.22, min(1.0, 0.25 + (wave * 0.5 + wave2 * 0.5) * 0.75))
-                Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [tint, tint.opacity(0.68)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(width: barWidth, height: max(2.5, height * level))
+        HStack(spacing: width * 0.85) {
+            ForEach(0..<7) { i in
+                let envelope = pow(1 - abs(Double(i) - 3) / 3, 1.5)
+                let low = max(width, 14 * (0.14 + envelope * 0.25))
+                let high = max(width, 14 * (0.14 + envelope * 0.88))
+                let phase = (time + Double(i) * 0.17) / (.pi / (5.2 + Double(i) * 0.61))
+                let travel = (1 - cos(.pi * phase)) / 2
+                Capsule().fill(accent).frame(width: width, height: low + (high - low) * travel)
             }
-        }
-        .frame(height: height)
+        }.frame(height: 14)
     }
 }
 
-// MARK: - Copy nguyên bản 100% Minh họa trong MenuPanelView.swift
-
-struct ExactPopoverIllustrationFrame: View {
+struct DemoFrame: View {
     let isPill: Bool
-    let cycle: Double // 0.0 ..< 1.0
-
-    private let accentColor = Color(red: 0.44, green: 0.62, blue: 0.88)
-
+    let time: Double
+    // Representative MacBook cutout and 24pt external-display menu bar.
+    // ScreenGeometry measures these per display in the running application.
+    private var compact: CGSize {
+        CGSize(width: isPill ? 135 : ScreenGeometry.standardNotchWidth + 80,
+               height: isPill ? 22 : ScreenGeometry.standardNotchHeight)
+    }
+    private var expansion: Double {
+        if time < 1.48 { return 0 }
+        if time < 4.66 { return spring(time - 1.48) }
+        return 1 - spring(time - 4.66)
+    }
+    // IslandView: spring(response: 0.42, dampingFraction: 0.72).
+    private func spring(_ t: Double) -> Double {
+        let omega = 2 * Double.pi / 0.42
+        let zeta = 0.72
+        let damped = omega * sqrt(1 - zeta * zeta)
+        return 1 - exp(-zeta * omega * t) * (cos(damped * t) + zeta * omega / damped * sin(damped * t))
+    }
+    private func mix(_ a: CGFloat, _ b: CGFloat) -> CGFloat { a + (b - a) * expansion }
+    private var expandedSize: CGSize { ScreenGeometry(for: NSScreen.main!).expandedSize }
+    private var cursor: CGPoint {
+        let outside = CGPoint(x: 455, y: 222)
+        // Enter via a wing, never via the physical camera cutout.
+        let inside = CGPoint(x: isPill ? 328 : 397, y: isPill ? 13 : 19)
+        func interpolate(_ a: CGPoint, _ b: CGPoint, _ t: Double) -> CGPoint {
+            let u = max(0, min(1, t)); let s = u * u * (3 - 2 * u)
+            return CGPoint(x: a.x + (b.x - a.x) * s, y: a.y + (b.y - a.y) * s)
+        }
+        if time < 0.6 { return outside }
+        if time < 1.4 { return interpolate(outside, inside, (time - 0.6) / 0.8) }
+        if time < 4.1 { return inside }
+        return interpolate(inside, outside, (time - 4.1) / 0.4)
+    }
     var body: some View {
-        let exp = previewExpansionProgress(for: cycle)
-        let compactW: CGFloat = isPill ? 162 : 148
-        let compactH: CGFloat = isPill ? 18 : 22
-        let expandedW: CGFloat = 248
-        let expandedH: CGFloat = 62
-        let currentW = compactW + (expandedW - compactW) * exp
-        let currentH = compactH + (expandedH - compactH) * exp
-        let cursorPt = previewCursorPoint(for: cycle)
-
         ZStack(alignment: .top) {
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.13, green: 0.16, blue: 0.24),
-                            Color(red: 0.08, green: 0.10, blue: 0.16)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            // Thanh Menu Bar giả lập
-            HStack {
+            LinearGradient(colors: [Color(red: 0.18, green: 0.25, blue: 0.38), Color(red: 0.08, green: 0.12, blue: 0.21)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            menuBar
+            island
+                .frame(width: mix(compact.width, expandedSize.width), height: mix(compact.height, expandedSize.height), alignment: .top)
+                .padding(.top, isPill ? 1 : 0)
+            // The physical cutout stays black, including while the UI expands.
+            if !isPill {
+                NotchAttachedShape(topShoulder: 12, bottomRadius: 10)
+                    .fill(.black).frame(width: ScreenGeometry.standardNotchWidth, height: ScreenGeometry.standardNotchHeight)
+            }
+            Image(nsImage: NSCursor.arrow.image).resizable()
+                .frame(width: NSCursor.arrow.image.size.width, height: NSCursor.arrow.image.size.height)
+                .offset(x: NSCursor.arrow.image.size.width / 2 - NSCursor.arrow.hotSpot.x,
+                        y: NSCursor.arrow.image.size.height / 2 - NSCursor.arrow.hotSpot.y)
+                .position(cursor)
+        }
+        .frame(width: 560, height: 250)
+        .clipped()
+        .environment(\.colorScheme, .dark)
+    }
+    private var menuBar: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "apple.logo")
+            Text("Finder").fontWeight(.semibold)
+            Text("File")
+            Text("Edit")
+            Spacer()
+            Image(systemName: "wifi")
+            Image(systemName: "battery.100percent")
+            Text("9:41")
+        }
+        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.88))
+        .padding(.horizontal, 16).frame(height: isPill ? 24 : 32)
+        .background(.white.opacity(0.07))
+    }
+    private var silhouette: AnyShape {
+        isPill
+            ? AnyShape(RoundedRectangle(cornerRadius: mix(11, 26), style: .continuous))
+            : AnyShape(NotchAttachedShape(topShoulder: mix(12, 14), bottomRadius: mix(10, 24)))
+    }
+    private var island: some View {
+        ZStack(alignment: .top) {
+            silhouette.fill(.black)
+            // Explicit static macOS 14–15 fallback from IslandView.
+            // ImageRenderer cannot capture a live desktop Liquid Glass backdrop.
+            silhouette.fill(LinearGradient(stops: [
+                .init(color: .white.opacity(0.20), location: 0),
+                .init(color: .white.opacity(0.06), location: 0.12),
+                .init(color: .clear, location: 0.58)
+            ], startPoint: .top, endPoint: .bottom)).opacity(max(0, expansion))
+            silhouette.fill(RadialGradient(colors: [accent.opacity(mix(0.10, 0.22)), .clear], center: .topLeading, startRadius: 8, endRadius: 220))
+            silhouette.stroke(LinearGradient(colors: [.white.opacity(mix(0.12, 0.22)), accent.opacity(mix(0.14, 0.28)), .white.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.8)
+            compactContent.opacity(max(0, 1 - expansion * 3))
+            expandedContent.opacity(max(0, min(1, (expansion - 0.4) / 0.6)))
+        }.frame(width: mix(compact.width, expandedSize.width), height: mix(compact.height, expandedSize.height), alignment: .top)
+        .clipShape(silhouette)
+    }
+    private var compactContent: some View {
+        HStack(spacing: 0) {
+            AlbumArtView(artwork: nil, size: isPill ? 16 : 20, isCircle: isPill, cornerRadius: 5.5)
+            Spacer(minLength: 0)
+            FrameBars(time: time)
+        }
+        .padding(.horizontal, isPill ? 6 : 17)
+        .frame(width: compact.width, height: compact.height)
+    }
+    private var expandedContent: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Circle().fill(.green).frame(width: 6, height: 6)
+                    Text("Music").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.82))
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                Spacer().frame(width: isPill ? 24 : ScreenGeometry.standardNotchWidth)
+                HStack(spacing: 8) {
+                    FrameBars(time: time, width: 2.2)
+                    HStack(spacing: 3) {
+                        Image(systemName: "waveform.badge.magnifyingglass").font(.system(size: 10, weight: .semibold))
+                        Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
+                    }.foregroundStyle(.white.opacity(0.70))
+                    Image(systemName: "chevron.up.circle.fill").font(.system(size: 14)).foregroundStyle(.white.opacity(0.55))
+                }.frame(maxWidth: .infinity, alignment: .trailing)
+            }.frame(height: 28)
+            HStack(spacing: 14) {
+                AlbumArtView(artwork: nil, size: 64, cornerRadius: 14)
+                    .shadow(color: accent.opacity(0.42), radius: 10, y: 4)
+                VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Midnight City").font(.system(size: 14, weight: .bold))
+                        Text("M83").font(.system(size: 11.5, weight: .medium)).foregroundStyle(.white.opacity(0.65))
+                    }
+                    VStack(spacing: 3) {
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(.white.opacity(0.16)).frame(height: 4)
+                                Capsule().fill(accent).frame(width: proxy.size.width * (83 + time) / 244, height: 4)
+                            }.frame(height: 8)
+                        }.frame(height: 8)
+                        HStack {
+                            Text("1:\(String(format: "%02d", 23 + Int(time)))")
+                            Spacer()
+                            Text("4:04")
+                        }.font(.system(size: 9.5, weight: .medium).monospacedDigit()).foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+            }
+            HStack(spacing: 18) {
                 HStack(spacing: 4) {
-                    Image(systemName: "apple.logo")
-                        .font(.system(size: 8.5, weight: .bold))
-                    Text("SenseBar")
-                        .font(.system(size: 8.5, weight: .semibold))
-                }
-                .foregroundStyle(.white.opacity(0.78))
-
-                Spacer()
-
-                HStack(spacing: 5) {
-                    Image(systemName: "wifi")
-                        .font(.system(size: 8))
-                    Text("9:41")
-                        .font(.system(size: 8.5, weight: .medium))
-                }
-                .foregroundStyle(.white.opacity(0.78))
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 22)
-            .background(Color.white.opacity(0.07))
-
-            // Island tự động biến hình từ Thu gọn -> Mở rộng khi con trỏ chạm vào
-            ZStack(alignment: .top) {
-                Group {
-                    if isPill {
-                        RoundedRectangle(cornerRadius: compactH / 2 + (14 - compactH / 2) * exp, style: .continuous)
-                            .fill(Color.black)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: compactH / 2 + (14 - compactH / 2) * exp, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
-                            )
-                    } else {
-                        NotchAttachedShape(topShoulder: 7 + 3 * exp, bottomRadius: 8 + 6 * exp)
-                            .fill(Color.black)
-                            .overlay(
-                                NotchAttachedShape(topShoulder: 7 + 3 * exp, bottomRadius: 8 + 6 * exp)
-                                    .stroke(Color.white.opacity(0.16), lineWidth: 0.6)
-                            )
-                    }
-                }
-
-                if exp < 0.45 {
-                    Group {
-                        if isPill {
-                            HStack(spacing: 5) {
-                                previewAlbumBadge(size: 13, cornerRadius: 3.5)
-                                HStack(spacing: 3) {
-                                    Image(systemName: "headphones")
-                                        .font(.system(size: 7.5, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.85))
-                                    Text("Midnight City — M83")
-                                        .font(.system(size: 8.5, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                        .lineLimit(1)
-                                }
-                                Spacer(minLength: 3)
-                                FrameEqualizerBars(
-                                    bars: 4,
-                                    barWidth: 1.5,
-                                    height: 8.5,
-                                    phase: cycle * .pi * 2,
-                                    tint: accentColor
-                                )
-                            }
-                            .padding(.horizontal, 6)
-                        } else {
-                            HStack(spacing: 0) {
-                                previewAlbumBadge(size: 13, cornerRadius: 3.8)
-                                    .padding(.leading, 13)
-                                Spacer()
-                                Circle()
-                                    .fill(Color(red: 0.12, green: 0.15, blue: 0.22))
-                                    .frame(width: 5.5, height: 5.5)
-                                    .overlay(
-                                        Circle()
-                                            .fill(Color.cyan.opacity(0.45))
-                                            .frame(width: 2, height: 2)
-                                    )
-                                Spacer()
-                                FrameEqualizerBars(
-                                    bars: 5,
-                                    barWidth: 1.5,
-                                    height: 9,
-                                    phase: cycle * .pi * 2,
-                                    tint: accentColor
-                                )
-                                .padding(.trailing, 13)
-                            }
-                        }
-                    }
-                    .frame(width: compactW, height: compactH)
-                    .opacity(Double(max(0, 1.0 - exp * 2.4)))
-                }
-
-                if exp > 0.22 {
-                    VStack(spacing: 5) {
-                        HStack(spacing: 0) {
-                            HStack(spacing: 4) {
-                                Circle().fill(Color.green).frame(width: 4.5, height: 4.5)
-                                Text("Google Chrome")
-                                    .font(.system(size: 7.5, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.78))
-                            }
-                            Spacer()
-                            FrameEqualizerBars(
-                                bars: 5,
-                                barWidth: 1.4,
-                                height: 8,
-                                phase: cycle * .pi * 2,
-                                tint: accentColor
-                            )
-                        }
-
-                        HStack(spacing: 8) {
-                            previewAlbumBadge(size: 28, cornerRadius: 6)
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Midnight City — M83")
-                                    .font(.system(size: 9.5, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
-                                Capsule()
-                                    .fill(Color.white.opacity(0.22))
-                                    .frame(width: 92, height: 3)
-                                    .overlay(alignment: .leading) {
-                                        Capsule()
-                                            .fill(accentColor)
-                                            .frame(width: 56, height: 3)
-                                    }
-                            }
-
-                            Spacer()
-
-                            HStack(spacing: 6) {
-                                Image(systemName: "backward.fill")
-                                    .font(.system(size: 8.5))
-                                Image(systemName: "pause.circle.fill")
-                                    .font(.system(size: 14))
-                                Image(systemName: "forward.fill")
-                                    .font(.system(size: 8.5))
-                            }
-                            .foregroundStyle(.white.opacity(0.92))
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .frame(width: expandedW, height: expandedH)
-                    .opacity(Double(min(1, (exp - 0.22) / 0.45)))
-                }
-            }
-            .frame(width: currentW, height: currentH)
-            .padding(.top, isPill ? 2 : 0)
-
-            // Con trỏ chuột minh họa trỏ vào Notch / Capsule
-            Image(systemName: "cursorarrow")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.65), radius: 2, x: 0.5, y: 1)
-                .position(x: cursorPt.x, y: cursorPt.y)
+                    Image(systemName: "arrow.up.forward.app.fill").font(.system(size: 10.5))
+                    Text("Open App").font(.system(size: 10.5, weight: .semibold))
+                }.foregroundStyle(.white.opacity(0.75)).padding(.horizontal, 9).padding(.vertical, 5)
+                    .background(Capsule().fill(.white.opacity(0.10)))
+                Spacer(minLength: 0)
+                Image(systemName: "backward.fill").font(.system(size: 14, weight: .semibold)).frame(width: 28, height: 28)
+                Image(systemName: "pause.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(.black)
+                    .frame(width: 32, height: 32).background(Circle().fill(.white))
+                Image(systemName: "forward.fill").font(.system(size: 14, weight: .semibold)).frame(width: 28, height: 28)
+                Spacer(minLength: 0)
+                HStack(spacing: 4) {
+                    Image(systemName: "speaker.wave.2.fill").foregroundStyle(accent)
+                    Text("65%")
+                }.font(.system(size: 10.5, weight: .semibold)).padding(.horizontal, 9).padding(.vertical, 5)
+                    .background(Capsule().fill(.white.opacity(0.10)))
+            }.padding(.bottom, 12)
         }
-        .frame(width: 332, height: 86, alignment: .top)
-        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-    }
-
-    @ViewBuilder
-    private func previewAlbumBadge(size: CGFloat, cornerRadius: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.24, green: 0.56, blue: 0.96),
-                        Color(red: 0.52, green: 0.28, blue: 0.92)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .frame(width: size, height: size)
-            .overlay(
-                Image(systemName: "music.note")
-                    .font(.system(size: size * 0.45, weight: .bold))
-                    .foregroundStyle(.white)
-            )
-    }
-
-    private func previewExpansionProgress(for cycle: Double) -> CGFloat {
-        if cycle < 0.22 {
-            return 0
-        } else if cycle < 0.34 {
-            let t = (cycle - 0.22) / 0.12
-            return CGFloat(t * t * (3.0 - 2.0 * t))
-        } else if cycle < 0.72 {
-            return 1
-        } else if cycle < 0.84 {
-            let t = (cycle - 0.72) / 0.12
-            return CGFloat(1.0 - t * t * (3.0 - 2.0 * t))
-        } else {
-            return 0
-        }
-    }
-
-    private func previewCursorPoint(for cycle: Double) -> CGPoint {
-        let start = CGPoint(x: 266, y: 72)
-        let targetCompact = CGPoint(x: 186, y: 14)
-        let targetExpanded = CGPoint(x: 198, y: 42)
-        if cycle < 0.22 {
-            let t = cycle / 0.22
-            let s = CGFloat(t * t * (3.0 - 2.0 * t))
-            return CGPoint(x: start.x + (targetCompact.x - start.x) * s, y: start.y + (targetCompact.y - start.y) * s)
-        } else if cycle < 0.36 {
-            let t = (cycle - 0.22) / 0.14
-            let s = CGFloat(t * t * (3.0 - 2.0 * t))
-            return CGPoint(x: targetCompact.x + (targetExpanded.x - targetCompact.x) * s, y: targetCompact.y + (targetExpanded.y - targetCompact.y) * s)
-        } else if cycle < 0.72 {
-            return targetExpanded
-        } else if cycle < 0.86 {
-            let t = (cycle - 0.72) / 0.14
-            let s = CGFloat(t * t * (3.0 - 2.0 * t))
-            return CGPoint(x: targetExpanded.x + (start.x - targetExpanded.x) * s, y: targetExpanded.y + (start.y - targetExpanded.y) * s)
-        } else {
-            return start
-        }
+        .padding(.horizontal, 22)
+        .frame(width: expandedSize.width, height: expandedSize.height, alignment: .top)
     }
 }
 
-// MARK: - Xuất GIF bằng ImageIO
-
-@MainActor
-func exportGIF(isPill: Bool, outputURL: URL) throws {
-    let totalFrames = 84
-    let frameDelay: Double = 0.05 // 20 fps * 84 frames = 4.2s (đúng chu kỳ 4.2s của MenuPanelView)
-    guard let destination = CGImageDestinationCreateWithURL(
-        outputURL as CFURL,
-        UTType.gif.identifier as CFString,
-        totalFrames,
-        nil
-    ) else {
-        throw NSError(domain: "MakePreviewGIFs", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot create GIF destination"])
-    }
-
-    let fileProps: [CFString: Any] = [
-        kCGImagePropertyGIFDictionary: [
-            kCGImagePropertyGIFLoopCount: 0
-        ]
-    ]
-    CGImageDestinationSetProperties(destination, fileProps as CFDictionary)
-
-    let frameProps: [CFString: Any] = [
-        kCGImagePropertyGIFDictionary: [
-            kCGImagePropertyGIFDelayTime: frameDelay,
-            kCGImagePropertyGIFUnclampedDelayTime: frameDelay
-        ]
-    ]
-
-    for i in 0..<totalFrames {
-        let cycle = Double(i) / Double(totalFrames)
-        let view = ExactPopoverIllustrationFrame(isPill: isPill, cycle: cycle)
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = 2.0
-        if let cgImage = renderer.cgImage {
-            CGImageDestinationAddImage(destination, cgImage, frameProps as CFDictionary)
+@main
+struct MakePreviewGIFs {
+    @MainActor static func main() throws {
+        _ = NSApplication.shared
+        let assets = URL(fileURLWithPath: "/tmp/sensebar-rendered-previews", isDirectory: true)
+        try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        for isPill in [false, true] {
+            let url = assets.appendingPathComponent("dynamic-island-\(isPill ? "capsule" : "notch").gif")
+            guard NSScreen.main != nil else {
+                throw NSError(domain: "MakePreviewGIFs", code: 1, userInfo: [NSLocalizedDescriptionKey: "A macOS graphical session is required for rendering."])
+            }
+            let count = 120
+            guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.gif.identifier as CFString, count, nil) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
+            for index in 0..<count {
+                try autoreleasepool {
+                    let renderer = ImageRenderer(content: DemoFrame(isPill: isPill, time: Double(index) * 0.05))
+                    renderer.scale = 2
+                    guard let frame = renderer.cgImage else { throw CocoaError(.fileReadUnknown) }
+                    CGImageDestinationAddImage(destination, frame, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.05, kCGImagePropertyGIFUnclampedDelayTime: 0.05]] as CFDictionary)
+                    if [0, 60].contains(index) {
+                        let png = URL(fileURLWithPath: "/tmp/sensebar-\(isPill ? "capsule" : "notch")-\(index).png")
+                        if let output = CGImageDestinationCreateWithURL(png as CFURL, UTType.png.identifier as CFString, 1, nil) {
+                            CGImageDestinationAddImage(output, frame, nil)
+                            CGImageDestinationFinalize(output)
+                        }
+                    }
+                }
+            }
+            guard CGImageDestinationFinalize(destination) else { throw CocoaError(.fileWriteUnknown) }
+            print("Exported \(url.path)")
         }
-    }
-
-    if !CGImageDestinationFinalize(destination) {
-        throw NSError(domain: "MakePreviewGIFs", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to finalize GIF"])
-    }
-}
-
-let projectRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-let assetsDir = projectRoot.appendingPathComponent("assets")
-try FileManager.default.createDirectory(at: assetsDir, withIntermediateDirectories: true)
-
-let notchURL = assetsDir.appendingPathComponent("dynamic-island-notch.gif")
-let capsuleURL = assetsDir.appendingPathComponent("dynamic-island-capsule.gif")
-
-MainActor.assumeIsolated {
-    do {
-        try exportGIF(isPill: false, outputURL: notchURL)
-        print("✓ Exported \(notchURL.path)")
-        try exportGIF(isPill: true, outputURL: capsuleURL)
-        print("✓ Exported \(capsuleURL.path)")
-    } catch {
-        fputs("Error: \(error)\n", stderr)
-        exit(1)
     }
 }

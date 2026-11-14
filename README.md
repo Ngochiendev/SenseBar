@@ -20,10 +20,18 @@ Dynamic Island · Per-app volume mixer · Device alerts
 
 </div>
 
-<p align="center">
-  <img src="assets/dynamic-island-notch.gif" width="47%" alt="SenseBar on a MacBook notch">
-  <img src="assets/dynamic-island-capsule.gif" width="47%" alt="SenseBar capsule on an external display">
-</p>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/dynamic-island-notch.gif" alt="SenseBar Dynamic Island on a MacBook notch"><br>
+      <sub><b>MacBook Notch</b> · <a href="assets/dynamic-island-notch.mp4">MP4 (30 fps)</a></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/dynamic-island-capsule.gif" alt="SenseBar capsule on an external display"><br>
+      <sub><b>External Display Capsule</b> · <a href="assets/dynamic-island-capsule.mp4">MP4 (30 fps)</a></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -35,22 +43,33 @@ SenseBar là tiện ích Menu Bar cho macOS, kết hợp Dynamic Island với b�
 
 | Dynamic Island | Audio Studio |
 |---|---|
-| Now Playing với ảnh bìa và tiến trình | Chuyển nhanh thiết bị đầu ra |
-| Phát, dừng, chuyển bài và tua | Âm lượng tổng và tắt tiếng |
-| Mở rộng khi rê chuột | Âm lượng riêng từng app 0–200% |
+| Now Playing với ảnh bìa, tiến trình và ghim nguồn phát | Chuyển nhanh thiết bị đầu ra |
+| Phát, dừng, chuyển bài, tua và mở app đang phát | Âm lượng tổng và tắt tiếng |
+| Mở rộng khi rê chuột hoặc bấm vào Island | Âm lượng riêng từng app 0–200% |
 | Notch, capsule và nhiều màn hình | Nhận diện app đang phát/tạm nghỉ |
-| Companion tương tác | Không cần driver âm thanh ảo |
+| Thú cưng (Companion) tương tác trực tiếp | Không cần driver âm thanh ảo |
 | Thông báo sạc, kết nối và pin yếu | CoreAudio process tap chạy cục bộ |
 
 ### Dynamic Island phù hợp với từng màn hình
 
-SenseBar tự nhận biết tai thỏ vật lý, hỗ trợ màn hình tích hợp, màn hình chính, màn hình theo con trỏ hoặc tất cả màn hình. Bạn có thể chỉnh chiều rộng, chiều cao, khoảng cách mép trên và chọn notch/capsule cho màn hình không có tai thỏ.
+SenseBar tự nhận biết tai thỏ vật lý, hỗ trợ màn hình tích hợp, màn hình chính, màn hình theo con trỏ hoặc tất cả màn hình. Bạn có thể chỉnh chiều rộng, chiều cao, khoảng cách mép trên, chọn notch/capsule cho màn hình không có tai thỏ và ghim nguồn phát nhạc ưu tiên ngay trên Island mở rộng.
 
-Nội dung tự ẩn khi ứng dụng khác chạy toàn màn hình. Liquid Glass gốc được dùng trên macOS hỗ trợ; macOS cũ hơn dùng bề mặt tĩnh nhẹ để giảm chi phí GPU.
+Nội dung tự ẩn khi ứng dụng khác chạy toàn màn hình. Liquid Glass gốc được dùng trên macOS hỗ trợ; macOS cũ hơn dùng bề mặt tĩnh nhẹ để giảm chi phí GPU. Thú cưng (Companion) có kiểu Tối giản hoặc Robot, tự ngủ sau 5 phút không thao tác và phản ứng theo trạng thái phát nhạc hoặc sạc pin.
+
+<p align="center">
+  <img src="assets/screenshots/popover-island.png" width="250" alt="Bảng điều khiển Dynamic Island và tùy chỉnh trong Menu Bar">
+  <img src="assets/screenshots/popover-pet.png" width="250" alt="Tùy chỉnh Thú cưng (Companion) trên Dynamic Island">
+</p>
 
 ### Âm lượng từng ứng dụng
 
-Audio Studio điều chỉnh gain riêng cho từng tiến trình âm thanh bằng CoreAudio. App đang tạm nghỉ vẫn giữ nguyên nhóm khi bạn thay đổi mức âm lượng. Mức 100% là âm lượng gốc; dải 100–200% dùng để boost và có giới hạn bảo vệ đầu ra.
+Audio Studio điều chỉnh gain riêng cho từng tiến trình âm thanh bằng CoreAudio. App đang tạm nghỉ vẫn giữ nguyên nhóm khi bạn thay đổi mức âm lượng. Mức 100% là âm lượng gốc; dải 100–200% dùng để boost (+dB) và có giới hạn bảo vệ đầu ra.
+
+<p align="center">
+  <img src="assets/screenshots/popover-audio.png" width="206" alt="Tab Loa & Ứng dụng với thanh trượt âm lượng từng app">
+  <img src="assets/screenshots/popover-audio-boost.png" width="206" alt="Khuếch đại âm lượng từng ứng dụng lên đến 200%">
+  <img src="assets/screenshots/popover-output.png" width="334" alt="Menu chuyển nhanh thiết bị âm thanh đầu ra">
+</p>
 
 ### AirPods và phụ kiện
 
@@ -58,16 +77,43 @@ Khi bạn chủ động bật thông báo thiết bị, SenseBar có thể hiể
 
 Dữ liệu pin phụ thuộc vào những gì thiết bị và macOS cung cấp. Một số phụ kiện chỉ báo trạng thái kết nối.
 
+<p align="center">
+  <img src="assets/screenshots/island-notice-airpods.png" width="330" alt="Thông báo kết nối AirPods Pro và phần trăm pin trên Island">
+  <img src="assets/screenshots/island-notice-charging.png" width="340" alt="Thông báo trạng thái đang sạc pin MacBook trên Island">
+</p>
+
+<details>
+<summary>Xem thêm ảnh chụp Cài đặt &amp; trạng thái Island</summary>
+
+<p align="center">
+  <img src="assets/screenshots/island-notch-compact.png" width="270" alt="Dynamic Island dạng Notch khi thu gọn">
+  <img src="assets/screenshots/island-capsule-compact.png" width="138" alt="Dynamic Island dạng Capsule khi thu gọn">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/island-notch-expanded.png" width="340" alt="Dynamic Island dạng Notch khi mở rộng">
+  <img src="assets/screenshots/island-capsule-expanded.png" width="340" alt="Dynamic Island dạng Capsule khi mở rộng">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/popover-settings-top.png" width="228" alt="Cài đặt chung và chọn màn hình hiển thị">
+  <img src="assets/screenshots/popover-settings-mid.png" width="228" alt="Cài đặt kiểu hiển thị màn hình không có tai thỏ và thông báo phụ kiện">
+  <img src="assets/screenshots/popover-settings-bottom.png" width="228" alt="Cài đặt Liquid Glass, quyền Trợ năng và kiểm tra cập nhật">
+</p>
+
+</details>
+
 ## Cài đặt
 
 1. Tải DMG tại [GitHub Releases](https://github.com/Ngochiendev/SenseBar/releases).
 2. Kéo **SenseBar** vào thư mục **Applications**.
 3. Mở ứng dụng và làm theo onboarding.
-4. Bật SenseBar tại **Cài đặt Hệ thống → Quyền riêng tư & Bảo mật → Trợ năng**.
+4. Bật quyền **Trợ năng** tại **Cài đặt Hệ thống → Quyền riêng tư & Bảo mật → Trợ năng** (và **Bluetooth** nếu bạn giữ bật thông báo phụ kiện).
 5. Quay lại SenseBar; nút tiếp tục sẽ mở khi macOS xác nhận quyền.
 
 <p align="center">
-  <img src="assets/install-sensebar.gif" width="560" alt="Kéo SenseBar vào Applications">
+  <img src="assets/install-sensebar.gif" width="560" alt="Kéo SenseBar vào Applications"><br>
+  <sub><a href="assets/install-sensebar.mp4">Xem bản MP4</a></sub>
 </p>
 
 ## Yêu cầu
@@ -86,7 +132,7 @@ Dữ liệu pin phụ thuộc vào những gì thiết bị và macOS cung cấp
 | **Audio Capture** | Khi mixer cần điều chỉnh app | Áp dụng gain riêng trên máy |
 | **Automation** | Chỉ khi tích hợp trình phát yêu cầu | Gửi lệnh điều khiển phát |
 
-Now Playing, âm thanh và thông tin thiết bị được xử lý trên máy. SenseBar không có tài khoản, quảng cáo hoặc telemetry riêng. Kiểm tra cập nhật tự động chỉ gọi GitHub Releases API qua HTTPS và có thể tắt trong Cài đặt.
+Now Playing, âm thanh và thông tin thiết bị được xử lý trên máy. SenseBar không có tài khoản, quảng cáo hoặc telemetry riêng. Kiểm tra cập nhật sử dụng Sparkle qua HTTPS tới appcast đã ký (`updates.sensebar.site`) và có thể kiểm tra thủ công hoặc tắt tự động kiểm tra trong Cài đặt.
 
 ## Build nhanh
 
@@ -129,22 +175,33 @@ SenseBar is a macOS menu bar utility that combines a Dynamic Island with a per-a
 
 | Dynamic Island | Audio Studio |
 |---|---|
-| Now Playing with artwork and progress | Fast output-device switching |
-| Play, pause, skip, and seek | Master volume and mute |
-| Hover to expand | Independent app volume from 0–200% |
+| Now Playing with artwork, progress, and source pinning | Fast output-device switching |
+| Play, pause, skip, seek, and jump to player | Master volume and mute |
+| Hover or click to expand | Independent app volume from 0–200% |
 | Notch, capsule, and multi-display modes | Active and paused app grouping |
 | Interactive Companion | No virtual audio driver |
 | Charging, connection, and battery alerts | Local CoreAudio process taps |
 
 ### Built for every display
 
-SenseBar detects physical notches and can target the built-in display, primary display, display under the pointer, or every display. Virtual notch and capsule dimensions can be tuned for non-notched screens.
+SenseBar detects physical notches and can target the built-in display, primary display, display under the pointer, or every display. Virtual notch and capsule dimensions can be tuned for non-notched screens, and you can switch or pin your preferred media player right from the expanded Island.
 
-Content hides while another app is full screen. Supported macOS versions use native Liquid Glass; older versions use lightweight static surfaces to reduce GPU work.
+Content hides while another app is full screen. Supported macOS versions use native Liquid Glass; older versions use lightweight static surfaces to reduce GPU work. Companion offers Minimal and Robot looks, sleeps after 5 minutes idle, and reacts to media playback and power events.
+
+<p align="center">
+  <img src="assets/screenshots/popover-island.png" width="250" alt="SenseBar menu bar popover showing Dynamic Island preview and controls">
+  <img src="assets/screenshots/popover-pet.png" width="250" alt="Companion appearance, stage, and behavior controls">
+</p>
 
 ### Per-app volume
 
-Audio Studio applies independent gain to audio processes through CoreAudio. Paused apps remain in their group when their saved volume changes. 100% preserves the original level; the 100–200% range provides bounded boost.
+Audio Studio applies independent gain to audio processes through CoreAudio. Paused apps remain in their group when their saved volume changes. 100% preserves the original level; the 100–200% range provides bounded boost (+dB).
+
+<p align="center">
+  <img src="assets/screenshots/popover-audio.png" width="206" alt="Audio Studio tab with per-app volume sliders">
+  <img src="assets/screenshots/popover-audio-boost.png" width="206" alt="Boosting an individual app volume past 100 percent">
+  <img src="assets/screenshots/popover-output.png" width="334" alt="Quick output-device switcher popover">
+</p>
 
 ### AirPods and accessories
 
@@ -152,13 +209,44 @@ After you explicitly enable device notices, SenseBar can show AirPods, headphone
 
 Battery detail depends on information exposed by the accessory and macOS. Some devices expose connection state without battery values.
 
+<p align="center">
+  <img src="assets/screenshots/island-notice-airpods.png" width="330" alt="AirPods Pro connection and battery notice on the Island">
+  <img src="assets/screenshots/island-notice-charging.png" width="340" alt="MacBook charging status notice on the Island">
+</p>
+
+<details>
+<summary>More screenshots: Settings &amp; Island states</summary>
+
+<p align="center">
+  <img src="assets/screenshots/island-notch-compact.png" width="270" alt="Compact notch Dynamic Island">
+  <img src="assets/screenshots/island-capsule-compact.png" width="138" alt="Compact capsule Dynamic Island">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/island-notch-expanded.png" width="340" alt="Expanded notch Dynamic Island">
+  <img src="assets/screenshots/island-capsule-expanded.png" width="340" alt="Expanded capsule Dynamic Island">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/popover-settings-top.png" width="228" alt="Startup modules and display target settings">
+  <img src="assets/screenshots/popover-settings-mid.png" width="228" alt="Non-notched display style and accessory alert settings">
+  <img src="assets/screenshots/popover-settings-bottom.png" width="228" alt="Liquid Glass, Accessibility status, and Sparkle update controls">
+</p>
+
+</details>
+
 ## Install
 
 1. Download the DMG from [GitHub Releases](https://github.com/Ngochiendev/SenseBar/releases).
 2. Drag **SenseBar** into **Applications**.
 3. Open the app and follow onboarding.
-4. Enable SenseBar in **System Settings → Privacy & Security → Accessibility**.
+4. Enable **Accessibility** in **System Settings → Privacy & Security → Accessibility** (and **Bluetooth** if you keep accessory alerts enabled).
 5. Return to SenseBar; Continue unlocks after macOS confirms access.
+
+<p align="center">
+  <img src="assets/install-sensebar.gif" width="560" alt="Drag SenseBar into Applications"><br>
+  <sub><a href="assets/install-sensebar.mp4">Watch MP4</a></sub>
+</p>
 
 ## Requirements
 
@@ -176,7 +264,7 @@ Battery detail depends on information exposed by the accessory and macOS. Some d
 | **Audio Capture** | The mixer adjusts an app | Apply per-app gain locally |
 | **Automation** | A player integration requires it | Send playback commands |
 
-Now Playing, audio, and device information are processed locally. SenseBar has no accounts, ads, or first-party telemetry. Automatic update checks only contact the GitHub Releases API over HTTPS and can be disabled in Settings.
+Now Playing, audio, and device information are processed locally. SenseBar has no accounts, ads, or first-party telemetry. Update checks use Sparkle over HTTPS against a signed appcast (`updates.sensebar.site`) and can be run manually or disabled in Settings.
 
 ## Quick build
 
