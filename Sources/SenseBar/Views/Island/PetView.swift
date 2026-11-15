@@ -1145,7 +1145,7 @@ final class PetHostView: NSView {
 }
 
 /// The companion centred in its frame for onboarding and Settings previews.
-struct PetView: NSViewRepresentable {
+struct NativePetView: NSViewRepresentable {
     var look: PetLook
     var mood: PetMood = .idle
     var size: CGFloat
@@ -1182,7 +1182,7 @@ struct PetView: NSViewRepresentable {
 
 /// The companion in a closed strip: resting beside the camera, or strolling
 /// through on a visit. It is hidden behind the camera as it passes.
-struct PetTrackView: NSViewRepresentable {
+struct NativePetTrackView: NSViewRepresentable {
     var look: PetLook
     var track: PetTrack
     /// Whether it stands at its resting place, or only comes for the visit.

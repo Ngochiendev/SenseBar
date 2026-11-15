@@ -54,7 +54,7 @@ SenseBar là tiện ích Menu Bar cho macOS, kết hợp Dynamic Island với b�
 
 SenseBar tự nhận biết tai thỏ vật lý, hỗ trợ màn hình tích hợp, màn hình chính, màn hình theo con trỏ hoặc tất cả màn hình. Bạn có thể chỉnh chiều rộng, chiều cao, khoảng cách mép trên, chọn notch/capsule cho màn hình không có tai thỏ và ghim nguồn phát nhạc ưu tiên ngay trên Island mở rộng.
 
-Nội dung tự ẩn khi ứng dụng khác chạy toàn màn hình. Liquid Glass gốc được dùng trên macOS hỗ trợ; macOS cũ hơn dùng bề mặt tĩnh nhẹ để giảm chi phí GPU. Thú cưng (Companion) có kiểu Tối giản hoặc Robot, tự ngủ sau 5 phút không thao tác và phản ứng theo trạng thái phát nhạc hoặc sạc pin.
+Nội dung tự ẩn khi ứng dụng khác chạy toàn màn hình. Liquid Glass gốc được dùng trên macOS hỗ trợ; macOS cũ hơn dùng bề mặt tĩnh nhẹ để giảm chi phí GPU. Thú cưng (Companion) có kiểu Tối giản, Robot hoặc nhân vật CrossPet (GPT, Claude, DeepSeek, Gemini, GLM, Qwen, Grok), tự ngủ sau 5 phút không thao tác và phản ứng theo trạng thái phát nhạc hoặc sạc pin.
 
 <p align="center">
   <img src="assets/screenshots/popover-island.png" width="250" alt="Bảng điều khiển Dynamic Island và tùy chỉnh trong Menu Bar">
@@ -186,7 +186,7 @@ SenseBar is a macOS menu bar utility that combines a Dynamic Island with a per-a
 
 SenseBar detects physical notches and can target the built-in display, primary display, display under the pointer, or every display. Virtual notch and capsule dimensions can be tuned for non-notched screens, and you can switch or pin your preferred media player right from the expanded Island.
 
-Content hides while another app is full screen. Supported macOS versions use native Liquid Glass; older versions use lightweight static surfaces to reduce GPU work. Companion offers Minimal and Robot looks, sleeps after 5 minutes idle, and reacts to media playback and power events.
+Content hides while another app is full screen. Supported macOS versions use native Liquid Glass; older versions use lightweight static surfaces to reduce GPU work. Companion offers Minimal, Robot, and CrossPet characters (GPT, Claude, DeepSeek, Gemini, GLM, Qwen, Grok), sleeps after 5 minutes idle, and reacts to media playback and power events.
 
 <p align="center">
   <img src="assets/screenshots/popover-island.png" width="250" alt="SenseBar menu bar popover showing Dynamic Island preview and controls">
@@ -303,8 +303,23 @@ The `defaults delete` command removes all local SenseBar preferences.
 
 [Releases](https://github.com/Ngochiendev/SenseBar/releases) ·
 [Contributing](CONTRIBUTING.md) ·
-[Security](SECURITY.md) ·
-[GPL-3.0](LICENSE)
+[Security](SECURITY.md)
+
+Source code: [GPL-3.0](LICENSE). CrossPet character artwork is licensed separately
+under **CC BY-NC-SA 4.0** (attribution, noncommercial use, share alike).
+Credit: [CrossPet / lokicorvus](https://github.com/lokicorvus/crosspet), ZipZipPipe,
+上善无形 and the community character designers credited upstream.
+On the compact notch/capsule, CrossPet characters greet while idle and stay
+attached to the bottom edge. All bundled poses use a shared bottom-aligned canvas
+with transparent source margins removed. CrossPet uses static WebP artwork;
+state changes replace a single image without overlapping fades or animation.
+The original artwork can differ in hand, hair and body pose between expressions.
+
+See [third-party notices](THIRD_PARTY_NOTICES.md) and
+[artwork terms](Sources/SenseBar/Resources/CrossPet/ARTWORK-LICENSE.md).
+
+Mã nguồn dùng GPL-3.0; hình nhân vật CrossPet dùng CC BY-NC-SA 4.0 riêng biệt,
+yêu cầu ghi nguồn, chỉ sử dụng phi thương mại và chia sẻ cùng giấy phép.
 
 Made for macOS by [Ngochiendev](https://github.com/Ngochiendev)
 

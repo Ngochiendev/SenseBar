@@ -25,7 +25,10 @@ final class PetService: ObservableObject {
     }
     private var activityTimer: Timer?
     private var sessionActive = true
-    private var isMediaPlaying = false
+    @Published private(set) var isMediaPlaying = false
+    var crossPetReaction: PetReaction? {
+        CrossPetCharacter.presentationReaction(event: currentReaction?.reaction, mediaPlaying: isMediaPlaying)
+    }
     private var lastGreeting = Date.distantPast
     private var idleResetUptime = ProcessInfo.processInfo.systemUptime
     private var statusCueTask: Task<Void, Never>?
@@ -257,6 +260,12 @@ final class PetService: ObservableObject {
         default: (nextMood, cue) = (.happy, .ready)
         }
         present(nextMood, reaction: reaction, cue: cue)
+    }
+
+    /// Cho xem biểu cảm trên cả Settings lẫn Island, sau đó trở về trạng thái đang dùng.
+    func tryExpression(_ expression: PetMood) {
+        let reaction: PetReaction = expression == .surprised ? .surprised : .ready
+        present(expression, reaction: reaction, cue: .ready)
     }
 
     private func scheduleNextVisit() {

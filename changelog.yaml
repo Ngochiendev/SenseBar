@@ -3,6 +3,17 @@
 # version luôn là chuỗi "X.Y.Z"; date tùy chọn, dùng chuỗi "YYYY-MM-DD".
 releases:
   # Đang chuẩn bị, chưa phát hành.
+  - version: "1.3.5"
+    changes:
+      - type: feature
+        text: "Thêm 7 thú cưng CrossPet, thay đổi biểu cảm khi nghe nhạc và tương tác."
+      - type: improvement
+        text: "Bảng chọn thú cưng gọn hơn, vị trí thú cưng trên tai thỏ và capsule cân đối hơn."
+      - type: fix
+        text: "Sửa hiện tượng giật khi di chuyển chuột giữa các màn hình ở chế độ Tất cả màn hình."
+      - type: improvement
+        text: "Giảm xử lý nền khi nghe nhạc, tìm ảnh bìa trên Zen và sử dụng nhiều màn hình."
+
   - version: "1.3.4"
     changes:
       - type: improvement

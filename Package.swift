@@ -25,6 +25,7 @@ let package = Package(
             name: "SenseBar",
             dependencies: ["SenseBarAudioBridge", .product(name: "Sparkle", package: "Sparkle")],
             path: "Sources/SenseBar",
+            resources: [.copy("Resources/CrossPet")],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
         .target(

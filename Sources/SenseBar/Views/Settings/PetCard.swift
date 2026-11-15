@@ -90,6 +90,23 @@ public struct PetCard: View {
 
     // MARK: - Appearance Controls
 
+    private func characterButton(_ character: CrossPetCharacter) -> some View {
+        let selected = style == character.style.rawValue
+        return Button { style = character.style.rawValue } label: {
+            CrossPetSprite(character: character)
+                .frame(width: 28, height: 28)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9)
+                    .strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.2))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("CrossPet " + character.name)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
     private var appearanceControls: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -113,8 +130,13 @@ public struct PetCard: View {
                 )
             }
 
-            // Hình dáng (chỉ hiện khi không phải Robot: Hình tròn vs Vuông bo)
-            if currentLook.style != .robot {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 36), spacing: 6)], spacing: 6) {
+                ForEach(CrossPetCharacter.allCases) { character in
+                    characterButton(character)
+                }
+            }
+
+            if currentLook.style == .minimal {
                 HStack(spacing: 8) {
                     Text(l10n.string(vi: "Hình dạng:", en: "Shape:"))
                         .font(.system(size: 10.5, weight: .medium))
@@ -158,36 +180,37 @@ public struct PetCard: View {
                 .transition(.opacity)
             }
 
-            // Bảng màu 7 swatches
-            HStack(spacing: 8) {
-                Text(l10n.string(vi: "Màu sắc:", en: "Color:"))
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.secondary)
+            if currentLook.style.crossPet == nil {
+                HStack(spacing: 8) {
+                    Text(l10n.string(vi: "Màu sắc:", en: "Color:"))
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(.secondary)
 
-                HStack(spacing: 6) {
-                    ForEach(PetPalette.allCases) { item in
-                        let isSelected = currentLook.palette == item
-                        Button {
-                            withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) {
-                                palette = item.rawValue
+                    HStack(spacing: 6) {
+                        ForEach(PetPalette.allCases) { item in
+                            let isSelected = currentLook.palette == item
+                            Button {
+                                withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) {
+                                    palette = item.rawValue
+                                }
+                            } label: {
+                                Circle()
+                                    .fill(LinearGradient(
+                                        colors: [Color(cgColor: item.light.cgColor), Color(cgColor: item.shade.cgColor)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ))
+                                    .frame(width: 17, height: 17)
+                                    .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.5))
+                                    .padding(2.5)
+                                    .overlay(Circle().strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.8))
                             }
-                        } label: {
-                            Circle()
-                                .fill(LinearGradient(
-                                    colors: [Color(cgColor: item.light.cgColor), Color(cgColor: item.shade.cgColor)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ))
-                                .frame(width: 17, height: 17)
-                                .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.5))
-                                .padding(2.5)
-                                .overlay(Circle().strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.8))
+                            .buttonStyle(.plain)
+                            .help(item.rawValue.capitalized)
                         }
-                        .buttonStyle(.plain)
-                        .help(item.rawValue.capitalized)
                     }
+                    Spacer()
                 }
-                Spacer()
             }
         }
     }

@@ -9,6 +9,13 @@ enum PetStyle: String, CaseIterable, Identifiable {
     case minimal
     /// Phong cách người máy với tai máy, ăng-ten và kính bảo hộ (visor).
     case robot
+    case crossGPT = "crosspet-gpt"
+    case crossClaude = "crosspet-claude"
+    case crossDeepSeek = "crosspet-deepseek"
+    case crossGemini = "crosspet-gemini"
+    case crossGLM = "crosspet-glm"
+    case crossQwen = "crosspet-qwen"
+    case crossGrok = "crosspet-grok"
 
     var id: String { rawValue }
 }

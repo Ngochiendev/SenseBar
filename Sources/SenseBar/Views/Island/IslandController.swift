@@ -331,6 +331,18 @@ final class IslandController: ObservableObject {
         let activeScreen = targetScreen(for: mode)
         let hideInFullscreen = UserDefaults.standard.bool(forKey: DefaultsKey.notchHideInFullscreen)
 
+        // Keep each display's window alive when the pointer changes displays.
+        if mode == "all", let activeScreen, let previous = mainPanel,
+           let previousScreen = previous.screen,
+           previousScreen.displayID != activeScreen.displayID,
+           let next = mirrorPanels.removeValue(forKey: activeScreen.displayID) {
+            previous.ignoresMouseEvents = true
+            mirrorPanels[previousScreen.displayID] = previous
+            mainPanel = next
+            hoverWorkItem?.cancel()
+            hoverWorkItem = nil
+        }
+
         if let activeScreen, let mainPanel {
             measureCameraNotch(on: activeScreen)
             let frame = NSRect(
@@ -339,9 +351,9 @@ final class IslandController: ObservableObject {
                 width: Self.canvasWidth,
                 height: Self.canvasHeight
             )
-            mainPanel.setFrame(frame, display: true)
+            if mainPanel.frame != frame { mainPanel.setFrame(frame, display: true) }
 
-            let isFs = FullscreenDetector.isFullscreen(on: activeScreen)
+            let isFs = hideInFullscreen && FullscreenDetector.isFullscreen(on: activeScreen)
             if let hostingView = mainPanel.contentView as? IslandHostingView<IslandView> {
                 hostingView.rootView = IslandView(controller: self, displayID: activeScreen.displayID, isMirror: false)
             }
@@ -371,13 +383,13 @@ final class IslandController: ObservableObject {
                     width: Self.canvasWidth,
                     height: Self.canvasHeight
                 )
-                mirror.setFrame(frame, display: true)
+                if mirror.frame != frame { mirror.setFrame(frame, display: true) }
 
                 if let hostingView = mirror.contentView as? NSHostingView<IslandView> {
                     hostingView.rootView = IslandView(controller: self, displayID: id, isMirror: true)
                 }
 
-                let isMirrorFs = FullscreenDetector.isFullscreen(on: screen)
+                let isMirrorFs = hideInFullscreen && FullscreenDetector.isFullscreen(on: screen)
                 setPanelVisible(mirror, !(hideInFullscreen && isMirrorFs))
             }
         } else {
@@ -452,7 +464,7 @@ final class IslandController: ObservableObject {
 
     private func createMirrorPanel(for screen: NSScreen) -> IslandPanel {
         let rootView = IslandView(controller: self, displayID: screen.displayID, isMirror: true)
-        let hostingView = NSHostingView(rootView: rootView)
+        let hostingView = IslandHostingView(rootView: rootView, controller: self)
         hostingView.frame = NSRect(x: 0, y: 0, width: Self.canvasWidth, height: Self.canvasHeight)
 
         let window = IslandPanel(

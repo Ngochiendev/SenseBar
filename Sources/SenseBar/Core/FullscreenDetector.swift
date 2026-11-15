@@ -1,177 +1,93 @@
 import AppKit
-import CoreGraphics
-import Foundation
+import ApplicationServices
 
-// MARK: - Space Topology (Native macOS Fullscreen Spaces detection)
-
-enum SpaceTopology {
-    private typealias ConnectionID = UInt32
-
-    private static func symbol(_ name: String) -> UnsafeMutableRawPointer? {
-        dlsym(UnsafeMutableRawPointer(bitPattern: -2), name)
-    }
-
-    private static let connection: ConnectionID = {
-        typealias Function = @convention(c) () -> ConnectionID
-        guard let symbol = symbol("CGSMainConnectionID") else { return 0 }
-        return unsafeBitCast(symbol, to: Function.self)()
-    }()
-
-    private typealias CopyDisplaySpacesFunction = @convention(c) (ConnectionID) -> Unmanaged<CFArray>?
-    private static let copyManagedDisplaySpaces: CopyDisplaySpacesFunction? = {
-        guard let symbol = symbol("CGSCopyManagedDisplaySpaces") else { return nil }
-        return unsafeBitCast(symbol, to: CopyDisplaySpacesFunction.self)
-    }()
-
-    /// Kiểm tra xem màn hình được chỉ định có đang ở chế độ Space toàn màn hình (Native Fullscreen Space) hay không.
-    /// - Parameter displayID: Định danh phần cứng của màn hình (`CGDirectDisplayID`).
-    /// - Returns: `true` nếu không gian hiển thị hiện tại là fullscreen Space.
-    static func isFullscreenSpace(on displayID: CGDirectDisplayID) -> Bool {
-        guard connection != 0, let copyManagedDisplaySpaces,
-              let displayDicts = copyManagedDisplaySpaces(connection)?.takeRetainedValue() as? [[String: Any]],
-              !displayDicts.isEmpty
-        else { return false }
-
-        let uuidMap = displayIDsByUUID()
-        for display in displayDicts {
-            let uuidStr = display["Display Identifier"] as? String
-            let matchedID = uuidStr.flatMap { uuidMap[$0] }
-            if NSScreen.screensHaveSeparateSpaces {
-                guard matchedID == displayID else { continue }
-            }
-            guard let spaceDictionaries = display["Spaces"] as? [[String: Any]],
-                  let currentSpaceID = (display["Current Space"] as? [String: Any])?["id64"] as? NSNumber
-            else { continue }
-
-            let isCurrentSpaceFullscreen = spaceDictionaries.contains { space in
-                (space["type"] as? NSNumber)?.intValue == 4 &&
-                (space["id64"] as? NSNumber) == currentSpaceID
-            }
-            if isCurrentSpaceFullscreen {
-                return true
-            }
-        }
-        return false
-    }
-
-    private static func displayIDsByUUID() -> [String: CGDirectDisplayID] {
-        var map: [String: CGDirectDisplayID] = [:]
-        for screen in NSScreen.screens {
-            guard let screenNum = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value,
-                  let uuid = CGDisplayCreateUUIDFromDisplayID(screenNum)?.takeRetainedValue(),
-                  let uuidStr = CFUUIDCreateString(nil, uuid) as String?
-            else { continue }
-            map[uuidStr] = screenNum
-        }
-        return map
-    }
-}
-
-// MARK: - App Fullscreen Detection (YouTube in browser, VLC, Games, HTML5 fullscreen)
-
-@MainActor
-enum AppFullscreen {
-    struct WindowInfo: Equatable {
-        let number: CGWindowID
-        let ownerPID: pid_t
-        let layer: Int
-        let alpha: Double
-        let bounds: CGRect
-    }
-
-    static func covers(_ window: CGRect, _ display: CGRect) -> Bool {
-        guard !display.isEmpty else { return false }
-        return window.insetBy(dx: -1, dy: -1).contains(display)
-    }
-
-    private static var confirmed = Set<CGWindowID>()
-
-    static func coveredDisplays() -> Set<CGDirectDisplayID> {
-        let ownPID = ProcessInfo.processInfo.processIdentifier
-        guard let entries = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
-                                                       kCGNullWindowID) as? [[String: Any]]
-        else { return [] }
-        let windows: [WindowInfo] = entries.compactMap { entry in
-            guard let number = (entry[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
-                  let pid = (entry[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
-                  let layer = (entry[kCGWindowLayer as String] as? NSNumber)?.intValue,
-                  let bounds = entry[kCGWindowBounds as String] as? NSDictionary,
-                  let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary)
-            else { return nil }
-            let alpha = (entry[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1
-            return WindowInfo(number: number, ownerPID: pid, layer: layer, alpha: alpha, bounds: rect)
-        }
-        let menuBarHidden = !NSApp.currentSystemPresentationOptions
-            .intersection([.autoHideMenuBar, .hideMenuBar]).isEmpty
-        let result = coveredDisplays(windows: windows,
-                                     frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
-                                     ownPID: ownPID, displays: activeDisplays(), menuBarHidden: menuBarHidden,
-                                     confirmed: confirmed)
-        confirmed = result.confirmed
-        return result.displays
-    }
-
-    static func coveredDisplays(windows: [WindowInfo], frontmostPID: pid_t?, ownPID: pid_t,
-                                displays: [CGDirectDisplayID: CGRect], menuBarHidden: Bool,
-                                confirmed: Set<CGWindowID>)
-        -> (displays: Set<CGDirectDisplayID>, confirmed: Set<CGWindowID>) {
-        var covered = Set<CGDirectDisplayID>(), kept = Set<CGWindowID>()
-        let frontmostWindow = windows.first(where: {
-            $0.layer == 0 && $0.alpha > 0 && $0.ownerPID == frontmostPID
-        })?.number
-        for (id, frame) in displays {
-            let front = windows.first(where: {
-                $0.layer == 0 && $0.alpha > 0 && $0.ownerPID != ownPID && !$0.bounds.intersection(frame).isEmpty
-            })?.ownerPID
-            for window in windows where window.alpha > 0 && window.ownerPID != ownPID
-                && covers(window.bounds, frame) {
-                if window.layer > 0 {
-                    if window.ownerPID == front || window.ownerPID == frontmostPID { covered.insert(id) }
-                } else if window.layer == 0,
-                          (window.ownerPID == frontmostPID && (menuBarHidden || window.bounds.contains(frame)))
-                            || (confirmed.contains(window.number) && window.number != frontmostWindow) {
-                    kept.insert(window.number)
-                    if window.ownerPID == front || window.ownerPID == frontmostPID { covered.insert(id) }
-                }
-            }
-        }
-        return (covered, kept)
-    }
-
-    private static func activeDisplays() -> [CGDirectDisplayID: CGRect] {
-        var count: UInt32 = 0
-        guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else { return [:] }
-        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetActiveDisplayList(count, &ids, &count) == .success else { return [:] }
-        var frames: [CGDirectDisplayID: CGRect] = [:]
-        for id in ids.prefix(Int(count)) { frames[id] = CGDisplayBounds(id) }
-        return frames
-    }
-}
-
-// MARK: - FullscreenDetector
-
-/// Bộ phát hiện trạng thái Toàn màn hình (Fullscreen) trên từng màn hình macOS.
-/// Hỗ trợ cả Native Fullscreen Space và ứng dụng che kín màn hình (YouTube, VLC, Game).
+/// Kết hợp khung cửa sổ đang hiển thị với cờ fullscreen do ứng dụng cung cấp qua AX.
+/// Cửa sổ phủ màn hình nhưng chỉ nằm phía sau một ứng dụng khác không làm ẩn Island.
 @MainActor
 public enum FullscreenDetector {
-    /// Kiểm tra màn hình có đang chạy ứng dụng hoặc nội dung toàn màn hình hay không.
-    /// - Parameter displayID: Định danh màn hình phần cứng.
-    /// - Returns: `true` nếu màn hình đang chạy toàn màn hình.
-    public static func isFullscreen(on displayID: CGDirectDisplayID) -> Bool {
-        if SpaceTopology.isFullscreenSpace(on: displayID) {
-            return true
-        }
-        if AppFullscreen.coveredDisplays().contains(displayID) {
-            return true
-        }
-        return false
+    struct Surface {
+        let owner: pid_t
+        let frame: CGRect
+        let level: Int
     }
 
-    /// Kiểm tra đối tượng `NSScreen` có đang chạy toàn màn hình hay không.
-    /// - Parameter screen: Màn hình cần kiểm tra (`NSScreen`).
-    /// - Returns: `true` nếu đang chạy toàn màn hình.
+    static func coversDisplay(_ window: CGRect, display: CGRect) -> Bool {
+        guard display.width > 0, display.height > 0 else { return false }
+        let tolerance: CGFloat = 1
+        return window.minX <= display.minX + tolerance
+            && window.minY <= display.minY + tolerance
+            && window.maxX >= display.maxX - tolerance
+            && window.maxY >= display.maxY - tolerance
+    }
+
+    static func isFullscreen(surfaces: [Surface], display: CGRect,
+                             activePID: pid_t?, axFullscreen: Bool) -> Bool {
+        guard let foreground = surfaces.first(where: { $0.level == 0 && $0.frame.intersects(display) }) else {
+            return false
+        }
+        if coversDisplay(foreground.frame, display: display) { return true }
+        if foreground.owner == activePID && axFullscreen { return true }
+        return surfaces.contains { surface in
+            surface.level > 0 && surface.owner == foreground.owner
+                && coversDisplay(surface.frame, display: display)
+        }
+    }
+
+    private static var cachedSurfaces: [Surface] = []
+    private static var sampledAt: TimeInterval = -.infinity
+
+    public static func isFullscreen(on displayID: CGDirectDisplayID) -> Bool {
+        let display = CGDisplayBounds(displayID)
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - sampledAt > 0.05 {
+        guard let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], 0)
+                as? [[String: Any]] else { return false }
+        let ownProcess = ProcessInfo.processInfo.processIdentifier
+        let surfaces = raw.compactMap { entry -> Surface? in
+            guard let owner = entry[kCGWindowOwnerPID as String] as? Int32, owner != ownProcess,
+                  (entry[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                  let bounds = entry[kCGWindowBounds as String] as? NSDictionary,
+                  let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+                  let level = entry[kCGWindowLayer as String] as? Int else { return nil }
+            return Surface(owner: owner, frame: frame, level: level)
+        }
+        cachedSurfaces = surfaces
+        sampledAt = now
+        }
+        let surfaces = cachedSurfaces
+        if isFullscreen(surfaces: surfaces, display: display, activePID: nil, axFullscreen: false) { return true }
+        let active = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        return isFullscreen(surfaces: surfaces, display: display, activePID: active,
+                            axFullscreen: active.map { accessibilityFullscreen(pid: $0, display: display) } ?? false)
+    }
+
     public static func isFullscreen(on screen: NSScreen) -> Bool {
         isFullscreen(on: screen.displayID)
+    }
+
+    private static func accessibilityFullscreen(pid: pid_t, display: CGRect) -> Bool {
+        guard AXIsProcessTrusted() else { return false }
+        let application = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(application, 0.05)
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &focused) == .success,
+              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return false }
+        let window = unsafeDowncast(focused, to: AXUIElement.self)
+        var fullscreen: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, "AXFullScreen" as CFString, &fullscreen) == .success,
+              (fullscreen as? Bool) == true else { return false }
+        var positionValue: CFTypeRef?
+        var sizeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &positionValue) == .success,
+              AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue) == .success,
+              let positionValue, let sizeValue,
+              CFGetTypeID(positionValue) == AXValueGetTypeID(), CFGetTypeID(sizeValue) == AXValueGetTypeID()
+        else { return false }
+        var origin = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(unsafeDowncast(positionValue, to: AXValue.self), .cgPoint, &origin),
+              AXValueGetValue(unsafeDowncast(sizeValue, to: AXValue.self), .cgSize, &size) else { return false }
+        let intersection = CGRect(origin: origin, size: size).intersection(display)
+        return intersection.width * intersection.height >= display.width * display.height * 0.9
     }
 }

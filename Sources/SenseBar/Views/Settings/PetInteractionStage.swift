@@ -9,6 +9,13 @@ struct PetInteractionStage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let character = look.style.crossPet {
+                CrossPetSprite(character: character, mood: pet.mood,
+                               reaction: pet.crossPetReaction, head: false)
+                    .frame(width: 84, height: 94)
+                    .frame(maxWidth: .infinity)
+                    .onTapGesture { pet.triggerReaction(.love) }
+            }
             GeometryReader { proxy in
                 let track = PetEngine.track(stripWidth: 148, stripHeight: 24, wing: 38,
                                             cameraWidth: 72, floats: false, bodyHeight: 24, side: side)
@@ -46,6 +53,12 @@ struct PetInteractionStage: View {
                 chip("Tải lỗi", "Download error", symbol: "exclamationmark.arrow.triangle.2.circlepath", color: .orange) { pet.downloadFailed() }
                 chip("Quẩy nhạc", "Dance", symbol: "music.note", color: .purple) { pet.triggerReaction(.groove) }
                 chip("Thả tim", "Love", symbol: "heart.fill", color: .pink) { pet.triggerReaction(.love) }
+                if look.style.crossPet != nil {
+                    chip("Suy nghĩ", "Thinking", symbol: "ellipsis.bubble", color: .blue) { pet.tryExpression(.thinking) }
+                    chip("Tìm kiếm", "Searching", symbol: "magnifyingglass", color: .cyan) { pet.tryExpression(.searching) }
+                    chip("Đọc sách", "Reading", symbol: "book", color: .orange) { pet.tryExpression(.determined) }
+                    chip("Ngạc nhiên", "Surprised", symbol: "exclamationmark", color: .yellow) { pet.tryExpression(.surprised) }
+                }
             }
             Text(l10n.string(vi: "Nhấn để thử trên cả sân khấu và notch/capsule. Tự trở lại sau 4 giây.",
                              en: "Try on the stage and notch/capsule. Returns automatically after 4 seconds."))

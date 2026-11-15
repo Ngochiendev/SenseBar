@@ -115,6 +115,7 @@ private struct EqualizerBridge: NSViewRepresentable {
 }
 
 final class EqualizerView: NSView {
+    private nonisolated(unsafe) var visibilityObserver: NSObjectProtocol?
     private var bars: [CALayer] = []
     private var barWidth: CGFloat = 0
     private var height: CGFloat = 0
@@ -163,8 +164,22 @@ final class EqualizerView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if let visibilityObserver { NotificationCenter.default.removeObserver(visibilityObserver) }
+        visibilityObserver = window.map { window in
+            NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
+                object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateBars() }
+            }
+        }
         updateBars()
     }
+
+    deinit {
+        if let visibilityObserver { NotificationCenter.default.removeObserver(visibilityObserver) }
+    }
+
+    override func viewDidHide() { super.viewDidHide(); updateBars() }
+    override func viewDidUnhide() { super.viewDidUnhide(); updateBars() }
 
     override func layout() {
         super.layout()
@@ -172,7 +187,7 @@ final class EqualizerView: NSView {
     }
 
     private func updateBars() {
-        let exposed = !isHiddenOrHasHiddenAncestor && window?.isVisible == true
+        let exposed = !isHiddenOrHasHiddenAncestor && window?.occlusionState.contains(.visible) == true
         let moving = animates && exposed
         let center = Double(bars.count - 1) / 2
 

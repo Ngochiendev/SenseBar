@@ -132,6 +132,119 @@ MainActor.assumeIsolated {
         precondition(PetEngine.idleMood(systemIdle: 300, sinceReset: 300, isMediaPlaying: false) == .sleeping)
         precondition(PetEngine.idleMood(systemIdle: 1, sinceReset: 900, isMediaPlaying: false) == .idle,
                      "Mouse or keyboard activity must wake the idle policy")
+        let display = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        let desktopWindow = FullscreenDetector.Surface(owner: 10, frame: display.insetBy(dx: 0, dy: 24), level: 0)
+        let movieWindow = FullscreenDetector.Surface(owner: 20, frame: display, level: 0)
+        precondition(!FullscreenDetector.isFullscreen(surfaces: [desktopWindow, movieWindow], display: display,
+                                                       activePID: 10, axFullscreen: false),
+                     "A background fullscreen window must not hide the island over a foreground desktop window")
+        precondition(FullscreenDetector.isFullscreen(surfaces: [movieWindow], display: display,
+                                                      activePID: 20, axFullscreen: false),
+                     "Borderless video must be detected without relying on Accessibility")
+        precondition(!FullscreenDetector.isFullscreen(surfaces: [movieWindow], display: display.offsetBy(dx: 1920, dy: 0),
+                                                       activePID: 20, axFullscreen: true),
+                     "Fullscreen on another monitor must not hide this monitor's island")
+        precondition(CrossPetCharacter.presentationReaction(event: nil, mediaPlaying: true) == .groove,
+                     "Playing media must select the listening pose")
+        precondition(CrossPetCharacter.presentationReaction(event: nil, mediaPlaying: false) == nil,
+                     "Pausing media must return to the normal idle pose")
+        precondition(CrossPetCharacter.presentationReaction(event: .love, mediaPlaying: true) == .love,
+                     "A charging or petting reaction must take priority over music")
+        for character in CrossPetCharacter.allCases {
+            precondition(character.pose(mood: .idle, reaction: nil, compact: true) == "roll_call",
+                         "Compact CrossPet must greet while idle")
+            precondition(character.pose(mood: .sleeping, reaction: nil, compact: true).hasPrefix("sleeping"),
+                         "Sleep must take priority over the default greeting")
+            for pose in character.bundledPoses {
+                for head in [true, false] {
+                    guard let image = CrossPetArtwork.image(character, pose: pose, head: head) else {
+                        preconditionFailure("Bundled CrossPet artwork must decode: \(character.rawValue)/\(pose), head=\(head)")
+                    }
+                    if head {
+                        for side in PetSide.allCases {
+                            for floats in [true, false] {
+                                var track = PetEngine.track(stripWidth: 240, stripHeight: 32, wing: 46,
+                                                            cameraWidth: 148, floats: floats, bodyHeight: 26, side: side)
+                                if floats { track.rest = side == .left ? 16 : 224 }
+                                let frame = CrossPetLayout.compactFrame(image: CGSize(width: image.width, height: image.height),
+                                                                        track: track, rests: true)
+                                precondition(abs(frame.maxY - track.height) < 0.001,
+                                             "Every CrossPet avatar must share the bottom baseline")
+                                precondition(frame.minY >= track.ceiling && frame.minX >= 0 && frame.maxX <= track.width,
+                                             "CrossPet must fit inside both compact display styles")
+                                precondition(abs(frame.width / frame.height - CGFloat(image.width) / CGFloat(image.height)) < 0.001,
+                                             "Compact artwork must preserve its aspect ratio without letterboxing")
+                                if floats {
+                                    let rounded = CGPath(roundedRect: CGRect(x: 0, y: 0, width: track.width, height: track.height),
+                                                         cornerWidth: track.height / 2, cornerHeight: track.height / 2, transform: nil)
+                                    precondition(rounded.contains(CGPoint(x: frame.minX, y: frame.maxY - 0.001)) &&
+                                                 rounded.contains(CGPoint(x: frame.maxX, y: frame.maxY - 0.001)),
+                                                 "Capsule corners must not cut off the avatar's bottom edge")
+                                }
+                                if let camera = track.hidden {
+                                    precondition(frame.maxX <= camera.lowerBound || frame.minX >= camera.upperBound,
+                                                 "Resting avatars must not cross the camera cutout")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for character in CrossPetCharacter.allCases {
+            let track = PetEngine.track(stripWidth: 240, stripHeight: 32, wing: 46, cameraWidth: 148,
+                                        floats: false, bodyHeight: 32)
+            let host = CrossPetHostView(frame: CGRect(x: 0, y: 0, width: 240, height: 32))
+            host.update(character: character, mood: .idle, reaction: nil, head: true,
+                        track: track, rests: true)
+            host.layoutSubtreeIfNeeded()
+            guard let sprite = host.layer?.sublayers?.first else { preconditionFailure("Missing CrossPet image layer") }
+            precondition(sprite.anchorPoint.y == 1 && abs(sprite.position.y - track.height) < 0.001,
+                         "CrossPet must remain attached to the island bottom edge")
+            precondition(sprite.animation(forKey: "bodyMotion") == nil,
+                         "CrossPet artwork must not squash or rotate as a whole image")
+            precondition(character.pose(mood: .happy, reaction: .groove) == "hum",
+                         "Music reaction must select the dancing artwork")
+            precondition(character.pose(mood: .downloadError, reaction: .confused) == "oops",
+                         "A failed download must select its own error artwork")
+        }
+        for character in CrossPetCharacter.allCases {
+            for head in [false, true] {
+                let host = CrossPetHostView(frame: CGRect(x: 0, y: 0, width: 56, height: 68))
+                var stableFrame: CGRect?
+                let expressions: [(PetMood, PetReaction?)] = [(.idle, nil), (.idle, .groove), (.sleeping, nil),
+                                                            (.idle, .wakeUp), (.idle, .love), (.idle, nil)]
+                for (mood, reaction) in expressions {
+                    host.update(character: character, mood: mood, reaction: reaction, head: head,
+                                track: nil, rests: true)
+                    host.layoutSubtreeIfNeeded()
+                    guard let imageLayer = host.layer?.sublayers?.first else {
+                        preconditionFailure("Missing registered character layer")
+                    }
+                    precondition(imageLayer.contents != nil && (imageLayer.sublayers ?? []).isEmpty,
+                                 "Every expression must render as one complete image")
+                    if let stableFrame { precondition(imageLayer.frame == stableFrame,
+                                                      "All character expressions must share a fixed display frame") }
+                    else { stableFrame = imageLayer.frame }
+                    precondition((imageLayer.animationKeys() ?? []).isEmpty,
+                                 "Static CrossPet artwork must not install animations")
+                }
+            }
+            for pose in character.bundledPoses {
+                for head in [true, false] {
+                    let registered = CrossPetArtwork.image(character, pose: pose, head: head)!
+                    precondition(registered.width == (head ? 256 : 320) && registered.height == registered.width,
+                                 "Every source pose must register onto the same canvas")
+                }
+            }
+        }
+        if Bundle.main.bundleURL.pathExtension == "app", let resources = Bundle.main.resourceURL {
+            let packagedPath = CrossPetArtwork.resourceBundle.bundleURL.resolvingSymlinksInPath().standardizedFileURL.path
+            let expectedPath = resources.appendingPathComponent("SenseBar_SenseBar.bundle")
+                .resolvingSymlinksInPath().standardizedFileURL.path
+            precondition(packagedPath == expectedPath,
+                         "A packaged app must load CrossPet from its own resources, not the developer build folder")
+        }
         print("SELFTEST OK")
         exit(0)
     }

@@ -480,25 +480,47 @@ struct IslandView: View {
     @ViewBuilder
     private func petStatusCue(_ cue: PetStatusCue, size: CGSize, isPill: Bool,
                               geo: ScreenGeometry) -> some View {
-        let label = Label(cue.title(using: l10n), systemImage: cue.symbol)
-            .font(.system(size: 9.5, weight: .semibold))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.72)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Color.white.opacity(0.12), in: Capsule())
+        let label = Group {
+            if geo.isNotched && !isPill {
+                Image(systemName: cue.symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 14, height: 16)
+                    .accessibilityLabel(cue.title(using: l10n))
+                    .help(cue.title(using: l10n))
+            } else {
+                Label(cue.title(using: l10n), systemImage: cue.symbol)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, geo.isNotched && !isPill ? 4 : 6)
+        .padding(.vertical, 3)
+        .background(Color.white.opacity(0.12), in: Capsule())
 
         if isPill || !geo.isNotched {
             label.frame(width: size.width, height: size.height, alignment: .center)
         } else {
-            let wing = geo.compactNotchWingWidth
+            let wing = max(0, (size.width - geo.cameraWidth) / 2)
+            let outerInset = min(wing, geo.shoulderRadius.shoulder + 2)
+            let safeWidth = max(0, wing - outerInset)
             HStack(spacing: 0) {
                 if pet.side == .left {
                     Spacer().frame(width: wing + geo.cameraWidth)
-                    label.frame(width: wing)
+                    Group {
+                        if safeWidth >= 22 { label.fixedSize() }
+                        else { Color.clear }
+                    }
+                    .frame(width: safeWidth)
+                    .padding(.trailing, outerInset)
                 } else {
-                    label.frame(width: wing)
+                    Group {
+                        if safeWidth >= 22 { label.fixedSize() }
+                        else { Color.clear }
+                    }
+                    .frame(width: safeWidth)
+                    .padding(.leading, outerInset)
                     Spacer().frame(width: geo.cameraWidth + wing)
                 }
             }
@@ -646,7 +668,8 @@ struct IslandView: View {
                                 .lineLimit(1)
                         }
 
-                        // Thanh tiến trình
+                        TimelineView(.animation(minimumInterval: 0.25, paused: !isViewExpanded || !track.isPlaying)) { context in
+                            let track = music.displayTrack(at: context.date) ?? track
                         VStack(spacing: 3) {
                             GeometryReader { geo in
                                 ZStack(alignment: .leading) {
@@ -679,6 +702,14 @@ struct IslandView: View {
                             .font(.system(size: 9.5, weight: .medium).monospacedDigit())
                             .foregroundStyle(.white.opacity(0.5))
                         }
+                        }
+
+                    }
+                    if pet.isEnabled, let character = pet.look.style.crossPet {
+                        CrossPetSprite(character: character, mood: pet.mood,
+                                       reaction: pet.crossPetReaction, head: false)
+                            .frame(width: 56, height: 68)
+                            .onTapGesture { pet.triggerReaction(.love) }
                     }
                 }
                 .padding(.horizontal, 22)
@@ -774,6 +805,22 @@ struct IslandView: View {
                 }
                 .padding(.horizontal, 22)
                 .padding(.bottom, 12)
+            } else if pet.isEnabled, let character = pet.look.style.crossPet {
+                HStack(spacing: 16) {
+                    CrossPetSprite(character: character, mood: pet.mood,
+                                   reaction: pet.crossPetReaction, head: false)
+                        .frame(width: 92, height: 104)
+                        .onTapGesture { pet.triggerReaction(.love) }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(l10n.string(vi: "Phát nhạc để mở điều khiển.", en: "Play music to show controls."))
+                            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
+                        if music.preferredSource != "auto" { openSelectedSourceButton }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 26)
+                .padding(.bottom, 10)
             } else {
                 VStack(spacing: 10) {
                     Image(systemName: "music.note")

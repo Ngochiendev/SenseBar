@@ -1,153 +1,155 @@
 import AppKit
 import Foundation
 
-private typealias InfoCallback = @convention(block) (NSDictionary?) -> Void
-private typealias InfoFunction = @convention(c) (DispatchQueue, @escaping InfoCallback) -> Void
-private typealias PIDCallback = @convention(block) (Int32) -> Void
-private typealias PIDFunction = @convention(c) (DispatchQueue, @escaping PIDCallback) -> Void
-private typealias DisplayIDCallback = @convention(block) (NSString?) -> Void
-private typealias DisplayIDFunction = @convention(c) (DispatchQueue, @escaping DisplayIDCallback) -> Void
-private typealias IsPlayingCallback = @convention(block) (Bool) -> Void
-private typealias IsPlayingFunction = @convention(c) (DispatchQueue, @escaping IsPlayingCallback) -> Void
-
-private let maximumArtworkBytes = 8 * 1_024 * 1_024
 nonisolated(unsafe) let mediaRemoteHandle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_LAZY)
+private let maximumArtworkBytes = 8 * 1_024 * 1_024
+private let emissionLock = NSLock()
 private nonisolated(unsafe) var watching = false
 private nonisolated(unsafe) var previousArtwork: Data?
 private nonisolated(unsafe) var previousTitle: String?
 private nonisolated(unsafe) var previousArtist: String?
 private nonisolated(unsafe) var previousSource: String?
-private let emissionLock = NSLock()
 private nonisolated(unsafe) var pauseRecovery = PauseRecovery()
 private let recoveryNotification = Notification.Name("SenseBarMediaRecoverySample")
 
 func resolveSymbol<T>(_ handle: UnsafeMutableRawPointer?, _ name: String, as type: T.Type) -> T? {
-    guard let handle, let symbol = dlsym(handle, name) else { return nil }
-    return unsafeBitCast(symbol, to: type)
+    if let handle, let address = dlsym(handle, name) { return unsafeBitCast(address, to: type) }
+    return nil
 }
 
 private func emitJSON(_ payload: [String: Any]) {
-    let sanitized = payload.filter { ($0.value as? Double)?.isFinite != false }
-    guard JSONSerialization.isValidJSONObject(sanitized),
-          let data = try? JSONSerialization.data(withJSONObject: sanitized) else { return }
-    emissionLock.lock()
-    defer { emissionLock.unlock() }
-    FileHandle.standardOutput.write(data)
-    FileHandle.standardOutput.write(Data("\n".utf8))
+    let finiteValues = payload.filter { entry in
+        guard let number = entry.value as? Double else { return true }
+        return number.isFinite
+    }
+    guard JSONSerialization.isValidJSONObject(finiteValues),
+          var bytes = try? JSONSerialization.data(withJSONObject: finiteValues) else { return }
+    bytes.append(0x0A)
+    emissionLock.withLock { FileHandle.standardOutput.write(bytes) }
+}
+
+/// Mỗi lần đọc sở hữu bộ tích lũy riêng; callback đến sau deadline không đổi snapshot đã xuất.
+private final class MediaReadback: @unchecked Sendable {
+    private let mutex = NSLock()
+    private let completions = DispatchGroup()
+    private let callbacks = DispatchQueue(label: "SenseBar.media.sample")
+    private var closed = false
+    private var values: [String: Any] = [:]
+    private var fields: [String: Any] = [:]
+    private var supported: Set<Int32>?
+
+    private func merge(_ additions: [String: Any]) {
+        mutex.withLock {
+            if !closed { values.merge(additions) { _, new in new } }
+        }
+    }
+
+    func collect(endpoint: MediaRemoteEndpoint?, fallback: Bool) {
+        if let endpoint {
+            let application = NSRunningApplication.runningApplications(withBundleIdentifier: endpoint.presentationBundle).first
+                ?? NSRunningApplication(processIdentifier: endpoint.owner.pid)
+            var identity: [String: Any] = ["pid": Int(endpoint.owner.pid), "bundleID": endpoint.presentationBundle]
+            if let name = application?.localizedName { identity["appName"] = name }
+            merge(identity)
+            completions.enter()
+            MediaRemoteIO.metadata(endpoint, artwork: true, queue: callbacks) { [self] in metadata($0) }
+            completions.enter()
+            MediaRemoteIO.commands(endpoint, queue: callbacks) { [self] commands in
+                mutex.withLock { if !closed { supported = commands } }
+                completions.leave()
+            }
+            completions.enter()
+            MediaRemoteIO.state(endpoint, queue: callbacks) { [self] state in
+                if let state, (1...4).contains(state) { merge(["isPlaying": state == 1]) }
+                completions.leave()
+            }
+        } else if fallback {
+            collectGlobalSession()
+        }
+    }
+
+    private func metadata(_ raw: NSDictionary?) {
+        mutex.withLock { if !closed { fields = raw as? [String: Any] ?? [:] } }
+        completions.leave()
+    }
+
+    private func collectGlobalSession() {
+        typealias MetadataReply = @convention(block) (NSDictionary?) -> Void
+        typealias MetadataCall = @convention(c) (DispatchQueue, @escaping MetadataReply) -> Void
+        typealias ProcessReply = @convention(block) (Int32) -> Void
+        typealias ProcessCall = @convention(c) (DispatchQueue, @escaping ProcessReply) -> Void
+        typealias BundleReply = @convention(block) (NSString?) -> Void
+        typealias BundleCall = @convention(c) (DispatchQueue, @escaping BundleReply) -> Void
+        typealias PlayingReply = @convention(block) (Bool) -> Void
+        typealias PlayingCall = @convention(c) (DispatchQueue, @escaping PlayingReply) -> Void
+        if let call = resolveSymbol(mediaRemoteHandle, "MRMediaRemoteGetNowPlayingInfo", as: MetadataCall.self) {
+            completions.enter()
+            call(callbacks) { [self] in metadata($0) }
+        }
+        if let call = resolveSymbol(mediaRemoteHandle, "MRMediaRemoteGetNowPlayingApplicationPID", as: ProcessCall.self) {
+            completions.enter()
+            call(callbacks) { [self] pid in
+                if pid > 0 {
+                    var identity: [String: Any] = ["pid": Int(pid)]
+                    if let app = NSRunningApplication(processIdentifier: pid) {
+                        if let name = app.localizedName { identity["appName"] = name }
+                        if let bundle = app.bundleIdentifier { identity["bundleID"] = bundle }
+                    }
+                    merge(identity)
+                }
+                completions.leave()
+            }
+        }
+        if let call = resolveSymbol(mediaRemoteHandle, "MRMediaRemoteGetNowPlayingApplicationDisplayID", as: BundleCall.self) {
+            completions.enter()
+            call(callbacks) { [self] identifier in
+                if let identifier, identifier.length > 0 { merge(["bundleID": identifier as String]) }
+                completions.leave()
+            }
+        }
+        if let call = resolveSymbol(mediaRemoteHandle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying", as: PlayingCall.self) {
+            completions.enter()
+            call(callbacks) { [self] playing in
+                merge(["isPlaying": playing])
+                completions.leave()
+            }
+        }
+    }
+
+    func finish() -> (snapshot: [String: Any], fields: [String: Any], commands: Set<Int32>?) {
+        _ = completions.wait(timeout: .now() + 1.8)
+        return mutex.withLock {
+            closed = true
+            for (key, suffix) in [("title", "Title"), ("artist", "Artist"), ("album", "Album")] {
+                if let text = fields["kMRMediaRemoteNowPlayingInfo" + suffix] as? String { values[key] = text }
+            }
+            for (key, suffix) in [("duration", "Duration"), ("rate", "PlaybackRate")] {
+                if let number = fields["kMRMediaRemoteNowPlayingInfo" + suffix] as? NSNumber {
+                    values[key] = number.doubleValue
+                }
+            }
+            return (values, fields, supported)
+        }
+    }
 }
 
 @_cdecl("sensebar_now_playing_get")
 public func sensebarNowPlayingGet() {
-    let handle = mediaRemoteHandle
-
-    let queue = DispatchQueue(label: "com.ngochiendev.sensebar.nowplaying")
-    let group = DispatchGroup()
-    let lock = NSLock()
-    var reply: [String: Any] = [:]
-    var sample: (elapsed: Double, timestamp: Date?)?
-    var recording: [String: Any] = [:]
-    var commands: Set<Int32>?
     let coordinator = MediaSessionCoordinator.shared
     let target = coordinator.choose()
-    let useGlobalFallback = target == nil && coordinator.isAutomatic
-
-    func set(_ key: String, _ value: Any?) {
-        guard let value else { return }
-        lock.lock()
-        reply[key] = value
-        lock.unlock()
-    }
-
-    let receiveInfo: (NSDictionary?) -> Void = { rawInfo in
-        let info = (rawInfo as? [String: Any]) ?? [:]
-        lock.withLock {
-            recording = info
-            reply["title"] = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String
-            reply["artist"] = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String
-            reply["album"] = info["kMRMediaRemoteNowPlayingInfoAlbum"] as? String
-            reply["duration"] = (info["kMRMediaRemoteNowPlayingInfoDuration"] as? NSNumber)?.doubleValue
-            reply["rate"] = (info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? NSNumber)?.doubleValue
-            if let elapsed = (info["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? NSNumber)?.doubleValue {
-                sample = (elapsed, info["kMRMediaRemoteNowPlayingInfoTimestamp"] as? Date)
-            }
+    let readback = MediaReadback()
+    readback.collect(endpoint: target, fallback: target == nil && coordinator.isAutomatic)
+    let result = readback.finish()
+    var snapshot = result.snapshot
+    let currentRecording = result.fields
+    let currentCommands = result.commands
+    let currentSample: (elapsed: Double, timestamp: Date?)? =
+        (currentRecording["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? NSNumber).map {
+            ($0.doubleValue, currentRecording["kMRMediaRemoteNowPlayingInfoTimestamp"] as? Date)
         }
-
-        group.leave()
-    }
-    group.enter()
-    if let target {
-        set("pid", Int(target.owner.pid))
-        let presentationID = target.presentationBundle
-        set("bundleID", presentationID)
-        let app = NSRunningApplication.runningApplications(withBundleIdentifier: presentationID).first
-            ?? NSRunningApplication(processIdentifier: target.owner.pid)
-        set("appName", app?.localizedName)
-        MediaRemoteIO.metadata(target, artwork: true, queue: queue, receive: receiveInfo)
-        group.enter()
-        MediaRemoteIO.commands(target, queue: queue) { supported in
-            lock.withLock { commands = supported }
-            group.leave()
-        }
-        group.enter()
-        MediaRemoteIO.state(target, queue: queue) { state in
-            switch state {
-            case 1: set("isPlaying", true)
-            case 2, 3, 4: set("isPlaying", false)
-            default: break
-            }
-            group.leave()
-        }
-    } else if useGlobalFallback, let getInfo = resolveSymbol(handle, "MRMediaRemoteGetNowPlayingInfo", as: InfoFunction.self) {
-        getInfo(queue, receiveInfo)
-    } else {
-        receiveInfo(nil)
-    }
-
-    if useGlobalFallback, let getPID = resolveSymbol(handle, "MRMediaRemoteGetNowPlayingApplicationPID", as: PIDFunction.self) {
-        group.enter()
-        getPID(queue) { pid in
-            if pid > 0 {
-                set("pid", Int(pid))
-                if let app = NSRunningApplication(processIdentifier: pid) {
-                    set("appName", app.localizedName)
-                    if let bundleID = app.bundleIdentifier {
-                        set("bundleID", bundleID)
-                    }
-                }
-            }
-            group.leave()
-        }
-    }
-
-    if useGlobalFallback, let getDisplayID = resolveSymbol(handle, "MRMediaRemoteGetNowPlayingApplicationDisplayID", as: DisplayIDFunction.self) {
-        group.enter()
-        getDisplayID(queue) { identifier in
-            if let id = identifier as String?, !id.isEmpty {
-                set("bundleID", id)
-            }
-            group.leave()
-        }
-    }
-
-    if useGlobalFallback, let getIsPlaying = resolveSymbol(handle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying", as: IsPlayingFunction.self) {
-        group.enter()
-        getIsPlaying(queue) { playing in
-            set("isPlaying", playing)
-            group.leave()
-        }
-    }
-
-    _ = group.wait(timeout: .now() + 1.8)
-
-    lock.lock()
-    var snapshot = reply
-    let currentSample = sample
-    let currentRecording = recording
-    let currentCommands = commands
-    lock.unlock()
-
     let isPlaying = (snapshot["isPlaying"] as? Bool) ?? (((snapshot["rate"] as? Double) ?? 0) > 0)
     snapshot["isPlaying"] = isPlaying
+    NotificationCenter.default.post(name: Notification.Name("SenseBarPlaybackActivity"), object: nil, userInfo: ["playing": isPlaying])
     // A selected browser may advertise commands while another app owns the
     // system route. Keep those facts separate for app-scoped delivery.
     snapshot["playerSupportsNext"] = currentCommands?.contains(4) == true
@@ -206,156 +208,127 @@ public func sensebarNowPlayingGet() {
     emitJSON(snapshot)
 }
 
-@_cdecl("sensebar_now_playing_watch")
-public func sensebarNowPlayingWatch() {
-    typealias RegisterFn = @convention(c) (DispatchQueue) -> Void
-    let handle = mediaRemoteHandle
-    guard let register = resolveSymbol(handle, "MRMediaRemoteRegisterForNowPlayingNotifications", as: RegisterFn.self) else {
-        emitJSON(["error": "notifications unavailable"])
-        return
-    }
+/// Tập trung lịch refresh trên main queue, còn đọc media và điều khiển chạy tuần tự ở worker.
+private final class MediaWatchSession: @unchecked Sendable {
+    private let executor = DispatchQueue(label: "SenseBar.media.events")
+    private var idle = false
+    private var lastRefresh = -Double.infinity
+    private var busy = false
+    private var dirty = false
+    private var scheduled: DispatchWorkItem?
+    private var reconciliation: DispatchWorkItem?
+    private var recovery: [DispatchWorkItem] = []
+    private var tokens: [NSObjectProtocol] = []
+    private var workspaceToken: NSObjectProtocol?
+    private var heartbeat: Timer?
+    private var input = PlaybackLineFramer()
 
-    watching = true
-    register(.main)
-
-    let worker = DispatchQueue(label: "com.ngochiendev.sensebar.nowplaying.watch")
-    nonisolated(unsafe) var pendingWork: DispatchWorkItem?
-    nonisolated(unsafe) var followUpWork: DispatchWorkItem?
-    nonisolated(unsafe) var refreshInFlight = false
-    nonisolated(unsafe) var refreshRequested = false
-    nonisolated(unsafe) var recoveryWork: [DispatchWorkItem] = []
-
-    @Sendable func requestRefresh() {
-        DispatchQueue.main.async {
-            guard !refreshInFlight else { refreshRequested = true; return }
-            refreshInFlight = true
-            worker.async {
+    func request() {
+        DispatchQueue.main.async { [self] in
+            if busy { dirty = true; return }
+            scheduled?.cancel()
+            scheduled = nil
+            lastRefresh = ProcessInfo.processInfo.systemUptime
+            busy = true
+            executor.async { [self] in
                 sensebarNowPlayingGet()
-                DispatchQueue.main.async {
-                    refreshInFlight = false
-                    if refreshRequested {
-                        refreshRequested = false
-                        requestRefresh()
-                    }
+                DispatchQueue.main.async { [self] in
+                    busy = false
+                    if dirty { dirty = false; request() }
                 }
             }
         }
     }
 
-    @Sendable func scheduleRefresh(delay: TimeInterval = 0.03) {
-        DispatchQueue.main.async {
-            // Keep the first deadline: timestamp notifications must not postpone pause.
-            if pendingWork == nil {
-                let item = DispatchWorkItem {
-                    pendingWork = nil
-                    requestRefresh()
-                }
-                pendingWork = item
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    private func enqueue(after delay: Double) {
+        DispatchQueue.main.async { [self] in
+            if scheduled == nil {
+                let job = DispatchWorkItem { [self] in scheduled = nil; request() }
+                scheduled = job
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: job)
             }
-            if followUpWork == nil {
-                let followUp = DispatchWorkItem {
-                    followUpWork = nil
-                    requestRefresh()
-                }
-                followUpWork = followUp
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.5, execute: followUp)
+            if reconciliation == nil {
+                let job = DispatchWorkItem { [self] in reconciliation = nil; request() }
+                reconciliation = job
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.5, execute: job)
             }
         }
     }
 
-    let baseNames = [
-        "kMRMediaRemoteNowPlayingInfoDidChangeNotification",
-        "kMRMediaRemoteNowPlayingApplicationDidChangeNotification",
-        "kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification",
-        "kMRMediaRemotePlayerNowPlayingInfoDidChangeNotification",
-        "kMRMediaRemoteNowPlayingPlayerStateDidChange",
-        "kMRMediaRemoteNowPlayingApplicationClientStateDidChange",
-        "kMRMediaRemotePlayerIsPlayingDidChangeNotification",
-        "kMRMediaRemoteNowPlayingPlayerDidChange",
-        "kMRMediaRemoteActivePlayerPathsDidChange",
-        "kMRMediaRemoteOriginNowPlayingInfoDidChangeNotification",
-        "_kMRMediaRemotePlayerPlaybackStateDidChangeNotification"
-    ]
-    let resolvedSymbols = [
-        "kMRMediaRemotePlayerPlaybackStateDidChangeNotification",
-        "kMRMediaRemoteNowPlayingPlayerDidChange",
-        "kMRMediaRemoteActivePlayerPathsDidChange",
-        "kMRMediaRemoteOriginNowPlayingInfoDidChangeNotification"
-    ].compactMap { MediaRemoteIO.constant($0) }
-
-    let notificationNames = Array(Set(baseNames + resolvedSymbols))
-
-    let observers = notificationNames.map { name in
-        NotificationCenter.default.addObserver(forName: Notification.Name(name), object: nil, queue: .main) { _ in
-            scheduleRefresh()
-        }
-    }
-
-    let recoveryObserver = NotificationCenter.default.addObserver(
-        forName: recoveryNotification, object: nil, queue: .main
-    ) { notification in
-        if notification.userInfo?["active"] as? Bool != true {
-            recoveryWork.forEach { $0.cancel() }
-            recoveryWork.removeAll()
+    func run() {
+        typealias NotificationRegistration = @convention(c) (DispatchQueue) -> Void
+        guard let register = resolveSymbol(mediaRemoteHandle, "MRMediaRemoteRegisterForNowPlayingNotifications",
+                                           as: NotificationRegistration.self) else {
+            emitJSON(["error": "notifications unavailable"])
             return
         }
-        let delays = notification.userInfo?["delays"] as? [TimeInterval] ?? []
-        guard !delays.isEmpty else { return }
-        recoveryWork.forEach { $0.cancel() }
-        recoveryWork = delays.map { delay in
-            let item = DispatchWorkItem { requestRefresh() }
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
-            return item
+        tokens.append(NotificationCenter.default.addObserver(forName: Notification.Name("SenseBarPlaybackActivity"), object: nil, queue: .main) { [self] event in
+            idle = event.userInfo?["playing"] as? Bool != true
+        })
+        watching = true
+        register(.main)
+        let suffixes = ["NowPlayingInfoDidChangeNotification", "NowPlayingApplicationDidChangeNotification",
+                        "NowPlayingApplicationIsPlayingDidChangeNotification", "PlayerNowPlayingInfoDidChangeNotification",
+                        "NowPlayingPlayerStateDidChange", "NowPlayingApplicationClientStateDidChange",
+                        "PlayerIsPlayingDidChangeNotification", "NowPlayingPlayerDidChange", "ActivePlayerPathsDidChange",
+                        "OriginNowPlayingInfoDidChangeNotification", "PlayerPlaybackStateDidChangeNotification"]
+        var names = Set(suffixes.map { "kMRMediaRemote" + $0 })
+        names.insert("_kMRMediaRemotePlayerPlaybackStateDidChangeNotification")
+        for suffix in suffixes {
+            if let actual = MediaRemoteIO.constant("kMRMediaRemote" + suffix) { names.insert(actual) }
         }
-    }
-
-    // Bộ đồng bộ định kỳ nhẹ (2s) giúp tự động làm mới ngay cả khi trình duyệt chuyển tab âm thầm
-    let pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
-        requestRefresh()
-    }
-    pollTimer.tolerance = 0.4
-
-    let appTerminationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-        forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main
-    ) { _ in
-        scheduleRefresh()
-    }
-
-    nonisolated(unsafe) var framer = PlaybackLineFramer()
-    FileHandle.standardInput.readabilityHandler = { input in
-        let chunk = input.availableData
-        if chunk.isEmpty { exit(0) }
-        DispatchQueue.main.async {
-            for line in framer.append(chunk) {
-                if line == "refresh" {
-                    scheduleRefresh(delay: 0)
-                    continue
-                }
-                worker.async {
-                    handleCommand(line)
-                    scheduleRefresh(delay: 0.14)
+        for name in names {
+            tokens.append(NotificationCenter.default.addObserver(forName: Notification.Name(name), object: nil,
+                                                                 queue: .main) { [self] _ in enqueue(after: 0.03) })
+        }
+        tokens.append(NotificationCenter.default.addObserver(forName: recoveryNotification, object: nil,
+                                                             queue: .main) { [self] event in
+            let active = event.userInfo?["active"] as? Bool == true
+            let delays = event.userInfo?["delays"] as? [Double] ?? []
+            if !active || !delays.isEmpty {
+                recovery.forEach { $0.cancel() }
+                recovery = active ? delays.map { delay in
+                    let job = DispatchWorkItem { [self] in request() }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: job)
+                    return job
+                } : []
+            }
+        })
+        workspaceToken = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main
+        ) { [self] _ in enqueue(after: 0.03) }
+        heartbeat = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [self] _ in
+            guard ProcessInfo.processInfo.systemUptime - lastRefresh >= (idle ? 5.8 : 1.8) else { return }
+            request()
+        }
+        heartbeat?.tolerance = 0.4
+        FileHandle.standardInput.readabilityHandler = { [self] stream in
+            let bytes = stream.availableData
+            guard !bytes.isEmpty else { exit(0) }
+            DispatchQueue.main.async { [self] in
+                for command in input.append(bytes) {
+                    if command == "refresh" { enqueue(after: 0); continue }
+                    executor.async { [self] in execute(command); enqueue(after: 0.14) }
                 }
             }
         }
+        request()
+        RunLoop.main.run()
     }
 
-    requestRefresh()
-    withExtendedLifetime((observers, recoveryObserver, appTerminationObserver, pollTimer)) {
-        RunLoop.main.run()
+    private func execute(_ command: String) {
+        if let bytes = command.data(using: .utf8),
+           let object = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+           object["command"] as? String == "set_preferred_source" {
+            MediaSessionCoordinator.shared.setPreferredSource(object["bundleID"] as? String ?? "auto")
+        } else if let action = PlaybackRequest(command) {
+            emitJSON(["commandAccepted": MediaSessionCoordinator.shared.perform(action)])
+        }
     }
 }
 
-private func handleCommand(_ line: String) {
-    if let data = line.data(using: .utf8),
-       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-       let command = json["command"] as? String {
-        if command == "set_preferred_source" {
-            let bundleID = (json["bundleID"] as? String) ?? "auto"
-            MediaSessionCoordinator.shared.setPreferredSource(bundleID)
-            return
-        }
-    }
-    guard let request = PlaybackRequest(line) else { return }
-    emitJSON(["commandAccepted": MediaSessionCoordinator.shared.perform(request)])
+@_cdecl("sensebar_now_playing_watch")
+public func sensebarNowPlayingWatch() {
+    let session = MediaWatchSession()
+    withExtendedLifetime(session) { session.run() }
 }

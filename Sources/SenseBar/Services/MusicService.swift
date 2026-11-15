@@ -73,7 +73,6 @@ final class MusicService: ObservableObject {
     private var process: Process?
     private var inputPipe: Pipe?
     private var outputPipe: Pipe?
-    private var tickTimer: Timer?
     private var lastSampleDate = Date()
     private var shouldRun = false
     private var cachedRemoteArtwork: NSImage?
@@ -180,7 +179,6 @@ final class MusicService: ObservableObject {
         resetSelectedPlayerControl()
         bridgeGeneration = UUID()
         rawBuffer.removeAll(keepingCapacity: false)
-        stopElapsedTicker()
         shouldRun = false
         process?.terminationHandler = nil
         outputPipe?.fileHandleForReading.readabilityHandler = nil
@@ -298,7 +296,6 @@ final class MusicService: ObservableObject {
         cachedRemoteArtwork = nil
         cachedRemoteAccent = nil
         browserArtwork.cancel()
-        stopElapsedTicker()
         UserDefaults.standard.set(bundleID, forKey: "SenseBarMediaPreferredSource")
         sendPreferredSourceCommand(bundleID)
         refreshNowPlaying()
@@ -443,33 +440,13 @@ final class MusicService: ObservableObject {
         }
     }
 
-    private func startElapsedTickerIfNeeded() {
-        guard tickTimer == nil else { return }
-        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, var current = self.track, current.isPlaying else {
-                    self?.stopElapsedTicker()
-                    return
-                }
-                let now = Date()
-                let delta = now.timeIntervalSince(self.lastSampleDate)
-                self.lastSampleDate = now
-                if current.duration > 0 {
-                    current.elapsed = min(current.duration, current.elapsed + delta)
-                } else {
-                    current.elapsed += delta
-                }
-                self.track = current
-            }
+    func displayTrack(at date: Date) -> NowPlayingTrack? {
+        guard var current = track else { return nil }
+        if current.isPlaying {
+            current.elapsed += max(0, date.timeIntervalSince(lastSampleDate))
+            if current.duration > 0 { current.elapsed = min(current.elapsed, current.duration) }
         }
-        timer.tolerance = 0.1
-        RunLoop.main.add(timer, forMode: .common)
-        tickTimer = timer
-    }
-
-    private func stopElapsedTicker() {
-        tickTimer?.invalidate()
-        tickTimer = nil
+        return current
     }
 
     private func appendOutput(_ data: Data) {
@@ -552,7 +529,6 @@ final class MusicService: ObservableObject {
             resetSelectedPlayerControl()
             browserArtwork.cancel()
             self.artwork = nil
-            self.stopElapsedTicker()
             return
         }
 
@@ -584,11 +560,6 @@ final class MusicService: ObservableObject {
         self.lastSampleDate = Date()
         self.track = parsedTrack
         discoverSelectedPlayerControl(remoteMetadata: resolution.usesRemoteMetadata)
-        if parsedTrack.isPlaying && parsedTrack.duration > 0 {
-            self.startElapsedTickerIfNeeded()
-        } else {
-            self.stopElapsedTicker()
-        }
         if !resolution.usesRemoteMetadata {
             browserArtwork.cancel()
             self.artwork = Self.applicationIcon(bundleID: resolution.bundleID, pid: resolution.pid)

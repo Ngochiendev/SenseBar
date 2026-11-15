@@ -80,6 +80,7 @@ final class BrowserArtworkService {
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
                   response.expectedContentLength <= 4_194_304 else { return nil }
             var data = Data()
+            data.reserveCapacity(Int(max(0, min(response.expectedContentLength, 4_194_304))))
             for try await byte in bytes {
                 guard !Task.isCancelled, data.count < 4_194_304 else { return nil }
                 data.append(byte)
@@ -178,7 +179,14 @@ final class BrowserArtworkService {
         return [support.appendingPathComponent("zen/Profiles")]
     }
 
+    private nonisolated static let sessionLock = NSLock()
+    private nonisolated(unsafe) static var cachedSession: (compressed: Data, decoded: Data)?
+
     nonisolated static func decodeSession(_ data: Data) -> Data? {
+        sessionLock.lock()
+        defer { sessionLock.unlock() }
+        if let cachedSession, cachedSession.compressed == data { return cachedSession.decoded }
+
         let magic = Data([0x6d, 0x6f, 0x7a, 0x4c, 0x7a, 0x34, 0x30, 0x00])
         guard data.count > 12, data.starts(with: magic) else { return nil }
         let source = data.dropFirst(12)
@@ -191,7 +199,10 @@ final class BrowserArtworkService {
                                               input.bindMemory(to: UInt8.self).baseAddress!, source.count, nil, COMPRESSION_LZ4_RAW)
                 }
             }
-            return decoded == capacity ? output : nil
+            guard decoded == capacity else { return nil }
+            if data.count + output.count <= 8_000_000 { cachedSession = (data, output) }
+            else { cachedSession = nil }
+            return output
     }
 
     nonisolated private static func normalized(_ value: String) -> String {
