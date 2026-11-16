@@ -20,21 +20,33 @@ final class SenseBarUpdateUserDriver: SPUStandardUserDriver {
 
     /// Notes dùng đúng HTML định dạng của CI; URL .invalid không tải gói thật.
     static func previewFixture(version: String, releaseNotes notes: String) throws -> (SUAppcastItem, SPUUserUpdateState) {
-        // Sparkle's public dictionary initializer is deprecated for production
-        // update selection, but sufficient for this Debug-only display fixture.
-        guard let item = SUAppcastItem(dictionary: [
-            "title": "SenseBar \(version)",
-            "sparkle:version": "999999",
-            "sparkle:shortVersionString": version,
-            "description": ["content": notes, "format": "html"],
-            "enclosure": [
-                "url": "https://preview.invalid/SenseBar-preview.zip",
-                "length": "5608223",
-                "type": "application/octet-stream",
-                "sparkle:version": "999999",
-                "sparkle:shortVersionString": version
-            ]
-        ]) else { throw CocoaError(.coderInvalidValue) }
+        // Debug-only fixture using Sparkle 2.10.1's secure archive format.
+        // Keep these keys in sync with SUAppcastItem when upgrading Sparkle.
+        let itemArchive = NSKeyedArchiver(requiringSecureCoding: true)
+        for key in ["deltaUpdates", "SUAppcastItemDeltaFromSparkleExecutableSize",
+                    "SUAppcastItemDeltaFromSparkleLocales", "signatures", "releaseNotesSignatures",
+                    "infoURL", "SUAppcastItemState", "maximumSystemVersion", "minimumSystemVersion",
+                    "sparkle:minimumAutoupdateVersion", "hardwareRequirements", "sparkle:minimumUpdateVersion",
+                    "sparkle:ignoreSkippedUpgradesBelowVersion", "releaseNotesURL", "fullReleaseNotesURL",
+                    "sparkle:phasedRolloutInterval", "sparkle:channel"] {
+            itemArchive.encode(nil as NSObject?, forKey: key)
+        }
+        itemArchive.encode("SenseBar \(version)", forKey: "title")
+        itemArchive.encode("999999", forKey: "versionString")
+        itemArchive.encode(version, forKey: "displayVersionString")
+        itemArchive.encode(notes, forKey: "itemDescription")
+        itemArchive.encode("html", forKey: "itemDescriptionFormat")
+        itemArchive.encode(URL(string: "https://preview.invalid/SenseBar-preview.zip")! as NSURL, forKey: "fileURL")
+        itemArchive.encode(Int64(5_608_223), forKey: "contentLength")
+        itemArchive.encode(Int64(0), forKey: "linkLength")
+        itemArchive.encode("application", forKey: "SUAppcastItemInstallationType")
+        itemArchive.encode("macos", forKey: "sparkle:os")
+        itemArchive.encode([String: String]() as NSDictionary, forKey: "propertiesDictionary")
+        itemArchive.encode(0, forKey: "SUAppcastItemSigningValidationStatus")
+        itemArchive.finishEncoding()
+        let itemDecoder = try NSKeyedUnarchiver(forReadingFrom: itemArchive.encodedData)
+        defer { itemDecoder.finishDecoding() }
+        guard let item = SUAppcastItem(coder: itemDecoder) else { throw CocoaError(.coderInvalidValue) }
 
         // SPUUserUpdateState exposes NSSecureCoding, but no public memberwise
         // initializer. Fixture keys match the pinned Sparkle 2.10.1 archive format.

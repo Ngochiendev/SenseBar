@@ -114,9 +114,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
 
-        let rootView = WelcomeOnboardingView { [weak self] in
-            self?.finishOnboarding()
-        }
+        let rootView = WelcomeOnboardingView(
+            onFinish: { [weak self] in self?.finishOnboarding() },
+            onResetMenuBarPosition: { [weak self] in self?.menuBarController?.resetStatusItemPosition() }
+        )
         let hostingController = NSHostingController(rootView: rootView)
 
         let window = NSWindow(contentViewController: hostingController)

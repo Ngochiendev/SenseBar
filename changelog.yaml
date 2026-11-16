@@ -5,6 +5,10 @@ releases:
   # Đang chuẩn bị, chưa phát hành.
   - version: "1.3.5"
     changes:
+      - type: improvement
+        text: "Sắp xếp lại màn hình cá nhân hóa khi thiết lập lần đầu, cho phép chọn thú cưng và thử biểu cảm ngay trên hình xem trước."
+      - type: feature
+        text: "Thêm bước chọn vị trí biểu tượng trong hướng dẫn ban đầu, có minh họa giữ phím Command để kéo và nút đưa SenseBar về phía phải khi bị khuất."
       - type: feature
         text: "Thêm 7 thú cưng CrossPet, thay đổi biểu cảm khi nghe nhạc và tương tác."
       - type: improvement

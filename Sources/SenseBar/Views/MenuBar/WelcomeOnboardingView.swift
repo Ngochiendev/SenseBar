@@ -2,11 +2,12 @@ import AppKit
 import SwiftUI
 
 enum OnboardingStep: Int, CaseIterable {
-    case welcome, pillars, permissions, done
+    case welcome, pillars, permissions, menuBar, done
 }
 
 struct WelcomeOnboardingView: View {
     var onFinish: () -> Void
+    var onResetMenuBarPosition: () -> Void
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var permissions = PermissionManager.shared
     @AppStorage(DefaultsKey.onboardingStep) private var stepIndex = 0
@@ -15,6 +16,9 @@ struct WelcomeOnboardingView: View {
     @AppStorage(DefaultsKey.notchDeviceNotices) private var deviceNotices = true
     @AppStorage(DefaultsKey.notchLowPeripheralBattery) private var lowBattery = true
     @AppStorage(DefaultsKey.petEnabled) private var petEnabled = true
+    @AppStorage(DefaultsKey.petStyle) private var petStyle = "minimal"
+    @AppStorage(DefaultsKey.petShape) private var petShape = "ball"
+    @AppStorage(DefaultsKey.petPalette) private var petPalette = "pearl"
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var step: OnboardingStep { OnboardingStep(rawValue: stepIndex) ?? .welcome }
@@ -22,7 +26,7 @@ struct WelcomeOnboardingView: View {
     private var needsBluetooth: Bool { island && deviceNotices }
     private var canContinue: Bool {
         switch step {
-        case .welcome: return true
+        case .welcome, .menuBar: return true
         case .pillars: return island || audio
         case .permissions, .done:
             return permissions.accessibilityGranted && (!needsBluetooth || permissions.bluetoothGranted)
@@ -53,7 +57,7 @@ struct WelcomeOnboardingView: View {
         .frame(width: 820, height: 720)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
-            stepIndex = min(max(stepIndex, 0), 3)
+            stepIndex = min(max(stepIndex, 0), OnboardingStep.allCases.count - 1)
             permissions.startMonitoring(interval: 0.8)
             if step == .done && !canContinue { stepIndex = OnboardingStep.permissions.rawValue }
         }
@@ -169,6 +173,7 @@ struct WelcomeOnboardingView: View {
         case .welcome: t("Chào mừng", "Welcome")
         case .pillars: t("Cá nhân hóa", "Make it yours")
         case .permissions: t("Quyền truy cập", "Permissions")
+        case .menuBar: t("Vị trí biểu tượng", "Icon position")
         case .done: t("Sẵn sàng", "Ready")
         }
     }
@@ -178,6 +183,7 @@ struct WelcomeOnboardingView: View {
         case .welcome: return t("Mac của bạn. Tiện lợi hơn.", "Your Mac. A little more effortless.")
         case .pillars: return t("Chọn điều bạn yêu thích.", "Make room for what you love.")
         case .permissions: return t("Một vài quyền cần thiết.", "A few permissions to get started.")
+        case .menuBar: return t("Đặt SenseBar trong tầm tay.", "Keep SenseBar within reach.")
         case .done: return t("Mọi thứ đã sẵn sàng.", "You're all set.")
         }
     }
@@ -186,6 +192,7 @@ struct WelcomeOnboardingView: View {
         switch step {
         case .welcome: return t("Nhạc, âm thanh và những tương tác nhỏ — ngay trên thanh Menu Bar của máy Mac.", "Music, audio and everyday interactions, right in your Mac's menu bar.")
         case .pillars: return t("Các tính năng đã sẵn sàng. Tắt những gì bạn không cần — mọi lựa chọn đều có thể đổi sau.", "Your features are ready. Turn off anything you don't need — you can change everything later.")
+        case .menuBar: return t("Chọn vị trí ngay trên thanh Menu Bar của máy bạn, chẳng hạn bên trái biểu tượng loa.", "Choose a spot directly in your Mac's menu bar, such as to the left of the sound icon.")
         case .permissions:
             return needsBluetooth
                 ? t("SenseBar cần Trợ năng và Bluetooth cho các tính năng bạn đã chọn. Cấp từng quyền bên dưới để tiếp tục.", "SenseBar needs Accessibility and Bluetooth for your selected features. Allow each below to continue.")
@@ -223,12 +230,16 @@ struct WelcomeOnboardingView: View {
             VStack(spacing: 14) {
                 choice("macbook", "Dynamic Island", t("Nhạc đang phát và các tương tác trên tai thỏ/capsule.", "Now Playing and interactions in your notch or capsule."), .purple, $island)
                 if island {
+                    companionChoice
                     HStack(alignment: .top, spacing: 14) {
-                        companionChoice
                         accessoryAlertChoice
+                        audioStudioChoice
                     }
+                    .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    audioStudioChoice
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                choice("slider.horizontal.3", "Audio Studio", t("Đổi loa đầu ra và chỉnh âm lượng từng ứng dụng từ 0–200%.", "Switch outputs and adjust each app's volume from 0–200%."), .blue, $audio)
                 Label(t("Bạn quyết định những gì SenseBar được phép sử dụng.", "You choose what SenseBar can access."), systemImage: "hand.raised")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true).padding(.top, 8)
@@ -320,6 +331,8 @@ struct WelcomeOnboardingView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onboardingSurface(tint: permissions.bluetoothGranted ? .green : .blue, selected: true)
             }
+        case .menuBar:
+            menuBarPlacement
         case .done:
             VStack(alignment: .leading, spacing: 20) {
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 48)).foregroundStyle(.green)
@@ -350,10 +363,120 @@ struct WelcomeOnboardingView: View {
         }
     }
 
+    private var menuBarPlacement: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 14) {
+                BrandBadge(size: 40)
+                Text(t("Tìm biểu tượng này trên thanh phía trên màn hình.",
+                       "Find this icon in the menu bar at the top of your screen."))
+                    .font(.system(size: 13, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Divider()
+            menuBarDragIllustration
+            accessibilityStep(1, t("Giữ phím ⌘ Command", "Hold ⌘ Command"),
+                              detail: t("Phím ⌘ nằm cạnh phím cách. Nhấn và giữ, chưa thả ra.", "Find ⌘ next to the space bar. Press and keep holding it."))
+            accessibilityStep(2, t("Nhấn giữ icon rồi kéo sang trái hoặc phải", "Click and hold the icon, then drag left or right"),
+                              detail: t("Vẫn giữ ⌘, nhấn giữ chuột trên icon SenseBar ở thanh trên cùng màn hình rồi kéo đến chỗ bạn thích, tránh vùng tai thỏ.",
+                                        "While holding ⌘, click and hold SenseBar in the menu bar at the top of your screen, then drag to a spot away from the notch."))
+            accessibilityStep(3, t("Thả chuột trước, thả phím ⌘ sau", "Release the mouse, then release ⌘"),
+                              detail: t("Biểu tượng sẽ ở lại vị trí vừa chọn. Với trackpad, nhấn giữ và kéo cũng tương tự.",
+                                        "The icon stays in your chosen spot. On a trackpad, press and hold while dragging in the same way."))
+            Label(t("Vị trí được macOS lưu tự động. Bạn có thể kéo lại bất cứ lúc nào.",
+                    "macOS saves the position automatically. You can move it again anytime."),
+                  systemImage: "checkmark.circle")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            DisclosureGroup(t("Không thấy biểu tượng?", "Can't see the icon?")) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(t("Đưa SenseBar về phía phải, sau đó giữ ⌘ để kéo đến vị trí bạn thích. Nếu thanh vẫn quá đầy, tạm thoát một ứng dụng có biểu tượng trên thanh rồi thử lại.",
+                           "Move SenseBar back to the right, then hold ⌘ to drag it where you like. If the bar is still full, temporarily quit a menu bar app and try again."))
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(t("Đưa biểu tượng về phía phải", "Move icon back to the right"), action: onResetMenuBarPosition)
+                        .buttonStyle(.bordered)
+                }
+                .padding(.top, 10)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onboardingSurface(tint: .blue, selected: true)
+    }
+
+    private var menuBarDragIllustration: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                Text("⌘ Command")
+                    .font(.system(size: 15, weight: .semibold))
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 9))
+                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.primary.opacity(0.15)))
+                Text("+").foregroundStyle(.secondary)
+                Label(t("Nhấn giữ & kéo", "Click, hold & drag"), systemImage: "cursorarrow.motionlines")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            HStack(spacing: 16) {
+                Image(systemName: "ellipsis").foregroundStyle(.secondary)
+                Image(systemName: "arrow.left").foregroundStyle(.blue)
+                BrandBadge(size: 30)
+                    .padding(5)
+                    .background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                Image(systemName: "arrow.right").foregroundStyle(.blue)
+                Image(systemName: "speaker.wave.2").foregroundStyle(.secondary)
+                Image(systemName: "wifi").foregroundStyle(.secondary)
+            }
+            .font(.system(size: 16))
+            .frame(maxWidth: .infinity).padding(.vertical, 12)
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
+            Text(t("Minh họa · Hãy kéo icon trên thanh thật ở phía trên màn hình.",
+                   "Illustration · Drag the actual icon in the menu bar at the top of your screen."))
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(Color.blue.opacity(0.04), in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(t("Giữ phím Command và nhấn giữ biểu tượng SenseBar trên thanh Menu Bar để kéo sang trái hoặc phải.",
+                              "Hold Command, then click and hold the SenseBar menu bar icon to drag it left or right."))
+    }
+
+    private var audioStudioChoice: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Audio Studio").font(.system(size: 13, weight: .semibold))
+                Spacer(minLength: 8)
+                Toggle("Audio Studio", isOn: $audio)
+                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
+            }
+            Text(t("Đổi loa đầu ra và chỉnh âm lượng riêng cho từng ứng dụng.",
+                   "Switch outputs and adjust the volume of each app."))
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 18) {
+                Image(systemName: "speaker.wave.2.fill")
+                Image(systemName: "slider.horizontal.3").font(.system(size: 28))
+                Image(systemName: "headphones")
+            }
+            .font(.system(size: 20)).foregroundStyle(.blue)
+            .frame(maxWidth: .infinity).frame(height: 72)
+            .background(Color.blue.opacity(0.065), in: RoundedRectangle(cornerRadius: 18))
+            Divider().opacity(0.35)
+            Label(t("Âm lượng từng ứng dụng · 0–200%", "Per-app volume · 0–200%"), systemImage: "waveform")
+                .font(.system(size: 10.5))
+                .fixedSize(horizontal: false, vertical: true)
+            Label(t("Có thể đổi trong Cài đặt bất cứ lúc nào.", "Change this anytime in Settings."),
+                  systemImage: "slider.horizontal.3")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onboardingSurface(tint: .blue, selected: audio, padding: 16)
+    }
+
     private var companionChoice: some View {
         VStack(alignment: .leading, spacing: 12) {
-            PetOnboardingIllustration(enabled: petEnabled)
-                .frame(height: 72)
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(t("Thú cưng", "Companion"))
@@ -367,34 +490,92 @@ struct WelcomeOnboardingView: View {
                 Toggle(t("Thú cưng", "Companion"), isOn: $petEnabled)
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
             }
+            if petEnabled {
+                Divider().opacity(0.35)
+                HStack(alignment: .top, spacing: 16) {
+                    PetOnboardingIllustration(enabled: petEnabled, look: selectedPetLook)
+                        .frame(maxWidth: .infinity, alignment: .top)
+                    petStyleChoices
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            }
             Label(t("Có thể đổi ngoại hình và tắt bất cứ lúc nào trong Cài đặt.",
                     "Change its look or turn it off anytime in Settings."),
                   systemImage: "paintpalette.fill")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 290, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .onboardingSurface(tint: .pink, selected: petEnabled, padding: 16)
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
+    private var selectedPetLook: PetLook {
+        petLook(for: PetStyle(rawValue: petStyle) ?? .minimal)
+    }
+
+    private func petLook(for style: PetStyle) -> PetLook {
+        PetLook(style: style,
+                shape: PetShape(rawValue: petShape) ?? .ball,
+                palette: PetPalette(rawValue: petPalette) ?? .pearl)
+    }
+
+    private func petName(for style: PetStyle) -> String {
+        if let character = style.crossPet { return character.name }
+        return style == .robot ? "Robot" : t("Tối giản", "Minimal")
+    }
+
+    private var petStyleChoices: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(t("Chọn bạn đồng hành", "Choose your companion"))
+                .font(.system(size: 11, weight: .semibold))
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
+                ForEach(PetStyle.allCases) { style in
+                    let selected = selectedPetLook.style == style
+                    Button {
+                        petStyle = style.rawValue
+                    } label: {
+                        VStack(spacing: 5) {
+                            PetView(look: petLook(for: style), size: 26, idles: false)
+                                .frame(width: 30, height: 30)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 3)
+                                .background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 8))
+                            Text(petName(for: style))
+                                .font(.system(size: 9, weight: selected ? .semibold : .regular))
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        .padding(5)
+                        .frame(maxWidth: .infinity)
+                        .background(selected ? Color.blue.opacity(0.10) : Color.primary.opacity(0.025),
+                                    in: RoundedRectangle(cornerRadius: 11))
+                        .overlay(RoundedRectangle(cornerRadius: 11)
+                            .strokeBorder(selected ? Color.blue : Color.primary.opacity(0.08), lineWidth: 1))
+                        .contentShape(RoundedRectangle(cornerRadius: 11))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(petName(for: style))
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+        }
+    }
+
     private var accessoryAlertChoice: some View {
         VStack(alignment: .leading, spacing: 12) {
-            DeviceAlertsIllustration(enabled: deviceNotices)
-                .frame(height: 72)
             HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(t("Phụ kiện", "Accessories"))
-                        .font(.system(size: 13, weight: .semibold))
-                    Text(t("Hiện AirPods, bàn phím và trạng thái sạc trên đảo.",
-                           "Show AirPods, keyboards and charging status on the island."))
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(t("Phụ kiện", "Accessories"))
+                    .font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 8)
                 Toggle(t("Thông báo phụ kiện", "Accessory alerts"), isOn: deviceNoticesBinding)
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
             }
+            Text(t("Hiện AirPods, bàn phím và trạng thái sạc trên đảo.",
+                   "Show AirPods, keyboards and charging status on the island."))
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            DeviceAlertsIllustration(enabled: deviceNotices)
+                .frame(height: 72)
             Divider().opacity(0.35)
             HStack {
                 Label(t("Pin yếu · 20% và 10%", "Low battery · 20% and 10%"),
@@ -412,7 +593,7 @@ struct WelcomeOnboardingView: View {
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 290, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onboardingSurface(tint: .blue, selected: deviceNotices, padding: 16)
         .transition(.opacity.combined(with: .move(edge: .top)))
     }

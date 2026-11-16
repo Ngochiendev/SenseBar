@@ -4,12 +4,13 @@ import SwiftUI
 struct PetInteractionStage: View {
     let look: PetLook
     let side: PetSide
+    var showsFullBody = true
     @ObservedObject private var pet = PetService.shared
     @ObservedObject private var l10n = L10n.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let character = look.style.crossPet {
+            if showsFullBody, let character = look.style.crossPet {
                 CrossPetSprite(character: character, mood: pet.mood,
                                reaction: pet.crossPetReaction, head: false)
                     .frame(width: 84, height: 94)

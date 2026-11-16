@@ -25,8 +25,17 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     }
 
     private func setupStatusItem() {
+        let autosaveName = "SenseBarStatusItem"
+        let preferredPositionKey = "NSStatusItem Preferred Position \(autosaveName)"
+        let defaults = UserDefaults.standard
+        // AppKit's undocumented autosave preference places zero near the right edge.
+        // Seed it before creation, while preserving any position the user has saved.
+        if defaults.object(forKey: preferredPositionKey) == nil {
+            defaults.set(0, forKey: preferredPositionKey)
+        }
+
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.autosaveName = "SenseBarStatusItem"
+        item.autosaveName = autosaveName
 
         if let button = item.button {
             button.image = BrandIconResources.menuBarTemplateImage()
@@ -59,6 +68,17 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             .sink { [weak self] status in
                 self?.syncUpdateBadge(status: status)
             }
+    }
+
+    func resetStatusItemPosition() {
+        closePopover()
+        if let statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+        }
+        statusItem = nil
+        badgeDotView = nil
+        UserDefaults.standard.set(0, forKey: "NSStatusItem Preferred Position SenseBarStatusItem")
+        setupStatusItem()
     }
 
     private func syncUpdateBadge(status: UpdateService.Status) {

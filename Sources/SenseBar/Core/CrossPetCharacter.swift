@@ -114,7 +114,8 @@ enum CrossPetLayout {
         } else {
             horizontalOffset = -10 * track.scale
         }
-        let minimumCenter = max(0, left + min(0, horizontalOffset)) + size.width / 2
+        // Offset chỉ dịch trong vùng an toàn, không nới mép bo capsule hoặc mép camera.
+        let minimumCenter = left + size.width / 2
         let maximumCenter = right - size.width / 2
         let center = min(maximumCenter, max(minimumCenter, restingCenter + horizontalOffset))
         return CGRect(x: rests ? center - size.width / 2 : -size.width,
