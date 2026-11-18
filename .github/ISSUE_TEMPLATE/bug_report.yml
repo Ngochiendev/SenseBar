@@ -1,0 +1,95 @@
+name: "🐛 Báo lỗi / Bug Report"
+description: "Báo cáo lỗi giao diện, âm thanh, kết nối thiết bị hoặc sự cố trên macOS / Report a defect in SenseBar"
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cảm ơn bạn đã giúp cải thiện **SenseBar**! Vui lòng điền thông tin bên dưới để chúng tôi có thể tái hiện và khắc phục lỗi nhanh nhất.
+        *(Thank you for helping improve SenseBar! Please fill in the details below so we can reproduce and fix the issue.)*
+
+  - type: input
+    id: sensebar_version
+    attributes:
+      label: "Phiên bản SenseBar / SenseBar Version"
+      description: "Ví dụ / Example: v1.3.5 (hoặc mã commit nếu tự build từ nhánh `dev`)"
+      placeholder: "v1.3.5"
+    validations:
+      required: true
+
+  - type: input
+    id: macos_version
+    attributes:
+      label: "Phiên bản macOS / macOS Version"
+      description: "Ví dụ / Example: macOS 15.3 Sequoia, macOS 14.7 Sonoma, macOS 26..."
+      placeholder: "macOS 15.3"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: arch
+    attributes:
+      label: "Kiến trúc máy / Mac Architecture"
+      options:
+        - "Apple Silicon (M1 / M2 / M3 / M4)"
+        - "Intel (x86_64)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: display_setup
+    attributes:
+      label: "Cấu hình màn hình / Display Setup"
+      options:
+        - "MacBook có tai thỏ vật lý (Built-in Notched Display)"
+        - "Mac không có tai thỏ / Màn hình rời - Kiểu Notch ảo (Virtual Notch)"
+        - "Mac không có tai thỏ / Màn hình rời - Kiểu Capsule (Floating Capsule)"
+        - "Nhiều màn hình kết hợp (Multi-display setup)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: subsystem
+    attributes:
+      label: "Khu vực gặp lỗi / Affected Area"
+      options:
+        - "Dynamic Island / Giao diện & Hiệu ứng (UI & Animation)"
+        - "Now Playing / Điều khiển nhạc & Ảnh bìa (Media & Artwork)"
+        - "Audio Studio / Âm lượng từng ứng dụng (Per-App Volume Mixer)"
+        - "Thông báo thiết bị Bluetooth / Pin / Sạc (Device & Battery Alerts)"
+        - "Thú cưng / Companion (Minimal, Robot, CrossPet)"
+        - "Quyền hệ thống & Onboarding (Permissions & Onboarding)"
+        - "Cập nhật ứng dụng (Sparkle Updater)"
+        - "Khác (Other)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Các bước tái hiện / Steps to Reproduce"
+      description: "Mô tả từng bước cụ thể dẫn đến lỗi / Describe the exact steps to trigger the behavior:"
+      placeholder: |
+        1. Mở ứng dụng đang phát nhạc (ví dụ: Spotify / Chrome)...
+        2. Rê chuột vào Dynamic Island...
+        3. Bấm vào...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_expected
+    attributes:
+      label: "Hành vi thực tế & mong đợi / Actual vs. Expected Behavior"
+      description: "Điều gì đã xảy ra và lẽ ra phải hoạt động như thế nào?"
+      placeholder: |
+        - Thực tế (Actual): ...
+        - Mong đợi (Expected): ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs_screenshots
+    attributes:
+      label: "Ảnh chụp màn hình, video hoặc Log / Screenshots, Recordings, or Logs (Tùy chọn / Optional)"
+      description: "Đính kèm ảnh/video hoặc log từ Console.app (vui lòng xóa thông tin cá nhân hoặc địa chỉ MAC đầy đủ trước khi gửi)."

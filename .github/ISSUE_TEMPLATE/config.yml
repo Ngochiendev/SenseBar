@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "🔒 Báo cáo lỗ hổng bảo mật / Report a Security Vulnerability"
+    url: https://github.com/Ngochiendev/SenseBar/security/advisories/new
+    about: "Vui lòng báo cáo riêng tư các lỗi bảo mật theo SECURITY.md, không mở issue công khai. / Please report security issues privately per SECURITY.md."

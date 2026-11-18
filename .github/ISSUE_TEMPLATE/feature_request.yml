@@ -1,0 +1,47 @@
+name: "✨ Đề xuất tính năng / Feature Request"
+description: "Đề xuất tính năng mới hoặc cải tiến trải nghiệm cho SenseBar / Suggest an idea or improvement"
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Hãy chia sẻ nhu cầu thực tế của bạn trước khi đề xuất giải pháp giao diện hoặc kỹ thuật.
+        *(Please describe the user problem or workflow need before proposing a specific UI or implementation.)*
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Nhóm tính năng / Area"
+      options:
+        - "Dynamic Island & Now Playing"
+        - "Audio Studio (Per-App Mixer & Output)"
+        - "Thú cưng / Companion"
+        - "Thông báo thiết bị & Pin (Device & Power Alerts)"
+        - "Cài đặt, Đa màn hình & Hiệu năng (Settings, Multi-display & Performance)"
+        - "Khác (Other)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Vấn đề hoặc nhu cầu sử dụng / Problem or Use Case"
+      description: "Bạn đang gặp bất tiện gì khi dùng máy Mac hằng ngày mà tính năng này sẽ giải quyết?"
+      placeholder: "Khi tôi đang dùng màn hình rời và mở nhạc trên..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "Giải pháp đề xuất / Proposed Solution"
+      description: "Bạn hình dung tính năng này hoạt động hoặc hiển thị như thế nào trên SenseBar?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Thông tin bổ sung / Additional Context (Tùy chọn / Optional)"
+      description: "Đính kèm ảnh minh họa, ý tưởng tham khảo hoặc các lưu ý về quyền riêng tư / hiệu năng."

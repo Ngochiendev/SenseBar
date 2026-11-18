@@ -57,9 +57,9 @@ Vui lòng giữ kín chi tiết cho đến khi bản vá được phát hành v�
 
 ### Ranh giới dữ liệu
 
-- Now Playing, audio và dữ liệu thiết bị được xử lý cục bộ.
+- SenseBar xử lý âm thanh và dữ liệu thiết bị trên máy. Khi Zen Browser thiếu ảnh bìa, SenseBar đọc tiêu đề và URL của các tab trong tệp khôi phục phiên trên máy. Nếu tìm thấy video phù hợp, ứng dụng gửi ID video đến YouTube để tải ảnh thu nhỏ. Nếu phát hiện YouTube Music nhưng chưa tìm được ID video, ứng dụng có thể gửi tên bài và nghệ sĩ đến dịch vụ tìm kiếm iTunes của Apple để lấy ảnh bìa.
 - SenseBar không có account, quảng cáo hoặc telemetry riêng.
-- Kiểm tra cập nhật gọi GitHub Releases API qua HTTPS.
+- Kiểm tra cập nhật sử dụng Sparkle qua HTTPS tới appcast đã ký (`updates.sensebar.site`) và có thể kiểm tra thủ công hoặc tắt tự động kiểm tra trong Cài đặt.
 - Bluetooth chỉ bắt đầu sau khi người dùng bật thông báo thiết bị.
 - Audio process tap chỉ được tạo khi Audio Studio cần điều chỉnh app.
 - Trợ năng là quyền bắt buộc để hoàn tất onboarding và kích hoạt SenseBar.
@@ -116,9 +116,9 @@ Please keep details private until a fix is available and users have had reasonab
 
 ### Data boundaries
 
-- Now Playing, audio, and device data are processed locally.
+- SenseBar processes audio and device data locally. When artwork is missing in Zen Browser, SenseBar reads tab titles and URLs from local session recovery files. If it finds a matching video, it sends the video ID to YouTube to fetch a thumbnail. If it detects YouTube Music but cannot find a matching video ID, it may send the track title and artist to Apple’s iTunes Search service to fetch cover art.
 - SenseBar has no account system, advertising, or first-party telemetry.
-- Update checks contact the GitHub Releases API over HTTPS.
+- Update checks use Sparkle over HTTPS against a signed appcast (`updates.sensebar.site`) and can be run manually or disabled in Settings.
 - Bluetooth starts only after device notices are enabled.
 - Audio process taps are created only when Audio Studio adjusts an app.
 - Accessibility is required before onboarding can finish and SenseBar can activate.
