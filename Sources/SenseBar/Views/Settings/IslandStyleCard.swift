@@ -13,17 +13,19 @@ struct IslandStyleCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(l10n.string(vi: "Màn hình không có tai thỏ", en: "Displays without a notch"))
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.secondary)
+            if islandController.canChooseStyle {
+                Text(l10n.string(vi: "Màn hình không có tai thỏ", en: "Displays without a notch"))
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.secondary)
 
-            HStack(spacing: 10) {
-                styleSilhouetteButton(id: "pill", title: l10n.string(vi: "Capsule", en: "Capsule"))
-                styleSilhouetteButton(id: "notch", title: l10n.string(vi: "Notch", en: "Notch"))
-            }
+                HStack(spacing: 10) {
+                    styleSilhouetteButton(id: "pill", title: l10n.string(vi: "Capsule", en: "Capsule"))
+                    styleSilhouetteButton(id: "notch", title: l10n.string(vi: "Notch", en: "Notch"))
+                }
 
-            if islandController.hasNotchedDisplay {
-                notchedDisplayNote
+                if islandController.hasNotchedDisplay {
+                    notchedDisplayNote
+                }
             }
             VStack(alignment: .leading, spacing: 8) {
                 Label(l10n.string(vi: "Thông báo phụ kiện", en: "Accessory alerts"), systemImage: "airpodspro")

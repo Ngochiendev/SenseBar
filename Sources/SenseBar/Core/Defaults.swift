@@ -19,6 +19,7 @@ enum DefaultsKey {
     static let peripheralBatteryThreshold = "sensebar.notch.peripheralBatteryThreshold"
     static let peripheralBatteryLastPresented = "sensebar.notch.peripheralBatteryLastPresented"
     static let peripheralBatteryRecoveryComponents = "sensebar.notch.peripheralBatteryRecoveryComponents"
+    static let peripheralBatteryHistory = "sensebar.notch.peripheralBatteryHistory"
     static let notchExpandOnHover = "sensebar.notch.expandOnHover"
     static let notchShowVisualizer = "sensebar.notch.showVisualizer"
     static let notchHideInFullscreen = "sensebar.notch.hideInFullscreen"

@@ -41,7 +41,7 @@ struct AudioMixerSection: View {
   private var outputCard: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 8) {
-        Image(systemName: AudioOutputAppearance.symbol(for: audio.outputDeviceName))
+        Image(systemName: audio.selectedOutputSymbol)
           .font(.system(size: 16, weight: .semibold))
           .foregroundStyle(Color.accentColor)
           .frame(width: 32, height: 32)
@@ -300,7 +300,7 @@ private struct AudioOutputPicker: View {
         dismiss()
       } label: {
         HStack(spacing: 10) {
-          Image(systemName: AudioOutputAppearance.symbol(for: device.name))
+          Image(systemName: device.kind.symbol)
             .font(.system(size: 17)).frame(width: 26)
           VStack(alignment: .leading, spacing: 3) {
             Text(device.name).font(.system(size: 11.5, weight: selected ? .semibold : .regular))
@@ -346,17 +346,6 @@ private struct AudioOutputPicker: View {
             en: hidden ? "Show output" : "Hide output"))
       }
     }
-  }
-}
-
-private enum AudioOutputAppearance {
-  static func symbol(for name: String) -> String {
-    let name = name.lowercased()
-    if name.contains("airpods") { return "airpodspro" }
-    if name.contains("headphone") || name.contains("tai nghe") { return "headphones" }
-    if name.contains("macbook") || name.contains("built-in") { return "laptopcomputer" }
-    if name.contains("teams") || name.contains("virtual") { return "waveform" }
-    return "speaker.wave.2.fill"
   }
 }
 

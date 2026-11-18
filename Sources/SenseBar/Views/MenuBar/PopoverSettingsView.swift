@@ -20,10 +20,7 @@ struct PopoverSettingsView: View {
 
                     DisplayTargetCard()
 
-                    if islandController.canChooseStyle {
-                        IslandStyleCard()
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
+                    IslandStyleCard()
 
                     FitAdjustmentCard()
 

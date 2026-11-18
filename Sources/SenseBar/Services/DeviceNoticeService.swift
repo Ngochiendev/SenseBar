@@ -95,12 +95,17 @@ final class DeviceNoticeService: ObservableObject {
     private var batteryReadings: [String: DeviceBatteryReading] = [:]
     private var lastConnectionNotices: [String: Date] = [:]
     private var audioTransitions = AudioAccessoryTransitions()
+    private var lastBatteryPreferences: (enabled: Bool, threshold: Int)?
 
     private init() {
         let saved = UserDefaults.standard.dictionary(forKey: DefaultsKey.peripheralBatteryLastPresented)
         let parts = UserDefaults.standard.dictionary(forKey: DefaultsKey.peripheralBatteryRecoveryComponents)
         lowBattery = PeripheralLowBatteryPolicy(lastPresented: saved as? [String: Date] ?? [:],
                                                recoveryComponents: parts as? [String: [String]] ?? [:])
+        if let data = UserDefaults.standard.data(forKey: DefaultsKey.peripheralBatteryHistory),
+           data.count <= 262_144, let restored = try? PropertyListDecoder().decode(PeripheralLowBatteryPolicy.self, from: data) {
+            lowBattery = restored
+        }
     }
 
     private var batteryThreshold: Int {
@@ -159,6 +164,7 @@ final class DeviceNoticeService: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
+        lastBatteryPreferences = (batteryAlertsEnabled, batteryThreshold)
         MacPowerService.shared.$state.removeDuplicates().scan((nil as MacPowerState?, nil as MacPowerState?)) {
             ($0.1, $1)
         }.sink { [weak self] before, next in
@@ -201,12 +207,17 @@ final class DeviceNoticeService: ObservableObject {
             if !self.enabled {
                 self.pending.removeAll(); self.devices.removeAll(); self.batteryReadings.removeAll(); self.dismissCurrent()
             } else {
-                self.pending.removeAll { $0.id.hasPrefix("low:") }
-                if let current = self.current, current.id.hasPrefix("low:") {
-                    let id = String(current.id.dropFirst(4))
-                    if !self.batteryAlertsEnabled || self.batteryReadings[id].flatMap({
-                        self.lowBattery.candidate(reading: $0, threshold: self.batteryThreshold)
-                    }) == nil { self.dismissCurrent() }
+                let changed = self.lastBatteryPreferences?.enabled != self.batteryAlertsEnabled
+                    || self.lastBatteryPreferences?.threshold != self.batteryThreshold
+                self.lastBatteryPreferences = (self.batteryAlertsEnabled, self.batteryThreshold)
+                if changed {
+                    self.pending.removeAll { $0.id.hasPrefix("low:") }
+                    if let current = self.current, current.id.hasPrefix("low:") {
+                        let id = String(current.id.dropFirst(4))
+                        if !self.batteryAlertsEnabled || self.batteryReadings[id].flatMap({
+                            self.lowBattery.candidate(reading: $0, threshold: self.batteryThreshold)
+                        }) == nil { self.dismissCurrent() }
+                    }
                 }
                 self.presentNext()
             }
@@ -313,8 +324,9 @@ final class DeviceNoticeService: ObservableObject {
         guard enabled, !sleeping else { return }
         if current?.id == notice.id { current = notice; scheduleDismissal(); return }
         pending.removeAll { $0.id == notice.id || Date().timeIntervalSince($0.created) > 12 }
-        if pending.count >= 4 { pending.removeFirst() }
-        pending.append(notice)
+        if pending.count >= 4 { pending.removeLast() }
+        if notice.id.hasPrefix("low:") { pending.insert(notice, at: 0) }
+        else { pending.append(notice) }
         presentNext()
     }
 
@@ -333,7 +345,7 @@ final class DeviceNoticeService: ObservableObject {
                 guard lowBattery.canPresent(id: id), let reading = batteryReadings[id],
                       let refreshed = lowBatteryNotice(id: id, reading: reading) else { continue }
                 next = refreshed
-                lowBattery.recordPresentation(id: id, reading: reading)
+                lowBattery.recordPresentation(id: id, reading: reading, threshold: batteryThreshold)
                 saveBatteryHistory()
             }
             current = next
@@ -355,10 +367,10 @@ final class DeviceNoticeService: ObservableObject {
     }
 
     private func saveBatteryHistory() {
-        UserDefaults.standard.set(lowBattery.lastPresented.filter { !$0.key.hasPrefix("hid:") },
-                                  forKey: DefaultsKey.peripheralBatteryLastPresented)
-        UserDefaults.standard.set(lowBattery.recoveryComponents.filter { !$0.key.hasPrefix("hid:") },
-                                  forKey: DefaultsKey.peripheralBatteryRecoveryComponents)
+        // One payload keeps the episode and its component list consistent across restart.
+        if let data = try? PropertyListEncoder().encode(lowBattery.persistentHistory) {
+            UserDefaults.standard.set(data, forKey: DefaultsKey.peripheralBatteryHistory)
+        }
     }
 
     private func dismissCurrent() {

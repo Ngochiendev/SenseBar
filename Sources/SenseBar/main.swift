@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CoreAudio
 import Sparkle
 
 MainActor.assumeIsolated {
@@ -95,6 +96,32 @@ MainActor.assumeIsolated {
                      "An absent case reading cannot prove case recovery")
         precondition(!restoredBatteryPolicy.observeRecovery(id: "airpods", reading: .init(left: 80, casePercent: 5), threshold: 20))
         precondition(restoredBatteryPolicy.observeRecovery(id: "airpods", reading: .init(left: 80, casePercent: 30), threshold: 20))
+        var earbudEpisode = PeripheralLowBatteryPolicy()
+        earbudEpisode.recordPresentation(id: "buds", reading: .init(left: 10, right: 80, casePercent: 25))
+        precondition(earbudEpisode.observeRecovery(id: "buds", reading: .init(left: 30, right: 80, casePercent: 25), threshold: 20),
+                     "A healthy sibling battery must not prevent a low earbud's recovery")
+        earbudEpisode.recordPresentation(id: "buds", reading: .init(left: 10, right: 80), threshold: 15)
+        let episodeData = try! PropertyListEncoder().encode(earbudEpisode.persistentHistory)
+        var decodedEpisode = try! PropertyListDecoder().decode(PeripheralLowBatteryPolicy.self, from: episodeData)
+        precondition(!decodedEpisode.canPresent(id: "buds"))
+        precondition(!decodedEpisode.observeRecovery(id: "buds", reading: .init(left: 24), threshold: 15))
+        precondition(decodedEpisode.observeRecovery(id: "buds", reading: .init(left: 25), threshold: 15))
+        precondition(AudioOutputKind.classify(name: "Renamed monitor", transport: kAudioDeviceTransportTypeHDMI,
+            terminal: 0) == .display)
+        precondition(AudioOutputKind.classify(name: "Renamed headset", transport: kAudioDeviceTransportTypeBuiltIn,
+            terminal: kAudioStreamTerminalTypeHeadphones) == .headphones)
+        precondition(AudioOutputKind.classify(name: "Interface", transport: kAudioDeviceTransportTypeUSB,
+            terminal: 0) == .usb)
+        precondition(AudioOutputKind.classify(name: "AirPods Pro", transport: kAudioDeviceTransportTypeVirtual,
+            terminal: 0) == .virtual, "Native transport must beat a misleading display name")
+        precondition(AudioOutputKind.classify(name: "AirPods Max", transport: kAudioDeviceTransportTypeBluetooth,
+            terminal: 0) == .airPodsMax)
+        precondition(Set(AudioOutputKind.allCases.map(\.symbol)).count == AudioOutputKind.allCases.count,
+                     "Each output category must have its own icon")
+        for kind in AudioOutputKind.allCases {
+            precondition(NSImage(systemSymbolName: kind.symbol, accessibilityDescription: nil) != nil,
+                         "Output symbols must exist on this macOS version")
+        }
         let accessoryFixture: [[String: Any]] = [
             ["Type": "Accessory Source", "Group Identifier": "AA:BB:CC:DD:EE:FF", "Part Identifier": "Left",
              "Current Capacity": 8, "Max Capacity": 100, "Is Charging": true],

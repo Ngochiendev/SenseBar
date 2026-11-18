@@ -87,7 +87,7 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
                 observeDisconnect(device, id: id)
                 let major = UInt32(device.deviceClassMajor)
                 if !(1...3).contains(major), let name = device.name {
-                    let symbol = name.lowercased().contains("airpods") ? "airpods" : major == 5 ? "computermouse" : "headphones"
+                    let symbol = Self.accessorySymbol(name: name, major: major, minor: UInt32(device.deviceClassMinor))
                     names[id] = (name, symbol)
                     connectionEpochs[id] = UUID()
                     powerIdentifiers[id] = Self.powerIdentifier(device)
@@ -220,14 +220,7 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
         let major = UInt32(device.deviceClassMajor)
         guard !(1...3).contains(major) else { return }
         connected.insert(id)
-        let minor = UInt32(device.deviceClassMinor)
-        let lower = name.lowercased()
-        let symbol = lower.contains("airpods pro") ? "airpodspro"
-            : lower.contains("airpods max") ? "airpodsmax"
-            : lower.contains("airpods") ? "airpods"
-            : major == 4 ? "headphones"
-            : major == 5 && minor & 0x10 != 0 ? "keyboard"
-            : major == 5 ? "computermouse" : "dot.radiowaves.left.and.right"
+        let symbol = Self.accessorySymbol(name: name, major: major, minor: UInt32(device.deviceClassMinor))
         deliver(.connected(id: id, name: name, symbol: symbol))
         names[id] = (name, symbol)
         let connectionEpoch = UUID()
@@ -238,6 +231,18 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
 
     func refreshBatteryReadings() {
         onWorker { [weak self] in self?.refreshBatteries() }
+    }
+
+    static func accessorySymbol(name: String, major: UInt32, minor: UInt32) -> String {
+        let name = name.lowercased()
+        if name.contains("airpods max") { return "airpodsmax" }
+        if name.contains("airpods pro") { return "airpodspro" }
+        if name.contains("airpods") { return "airpods" }
+        if name.contains("trackpad") { return "rectangle.and.hand.point.up.left" }
+        if name.contains("keyboard") || (major == 5 && minor & 0x10 != 0) { return "keyboard" }
+        if major == 5 { return "computermouse" }
+        if major == 4 { return "headphones" }
+        return "dot.radiowaves.left.and.right"
     }
 
     @objc private func didDisconnect(_ token: IOBluetoothUserNotification, device: IOBluetoothDevice) {

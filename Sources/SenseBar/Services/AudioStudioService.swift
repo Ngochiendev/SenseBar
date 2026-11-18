@@ -9,6 +9,7 @@ struct AudioOutputDevice: Identifiable, Sendable {
   let uid: String
   let name: String
   let canAdjustVolume: Bool
+  let kind: AudioOutputKind
 }
 
 struct AudioAppEntry: Identifiable, Equatable {
@@ -42,6 +43,7 @@ final class AudioStudioService: ObservableObject {
   @Published private(set) var canMuteMaster = false
   @Published private(set) var isSwitchingOutput = false
   @Published private(set) var outputSwitchFailed = false
+  @Published private(set) var masterControlFailed = false
   @Published private(set) var hiddenOutputUIDs = Set(
     UserDefaults.standard.stringArray(forKey: "sensebar.audio.hiddenOutputs") ?? [])
 
@@ -60,7 +62,13 @@ final class AudioStudioService: ObservableObject {
   private var audioListeners:
     [(AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
   private var watchedProcesses = Set<AudioObjectID>()
+  private var watchedOutput = AudioObjectID(kAudioObjectUnknown)
   private var outputDeviceID = AudioObjectID(kAudioObjectUnknown)
+  private var outputDeviceUID: String?
+  private var hasNativeMute = false
+  private let outputTransactions = AudioOutputTransactions()
+  private var pendingMasterWrite: UInt64?
+  private var lastAudibleMasterVolumes: [String: Double] = [:]
 
   private static let volumesKey = "sensebar.audio.appVolumes"
 
@@ -81,6 +89,7 @@ final class AudioStudioService: ObservableObject {
                                                  object: nil, queue: .main) { [weak self] _ in
       MainActor.assumeIsolated {
         self?.sleeping = true
+        self?.invalidateOutputCommands()
         self?.stopAllEngines()
       }
     })
@@ -98,6 +107,7 @@ final class AudioStudioService: ObservableObject {
         let enabled = SensePillar.audioStudio.isEnabled()
         guard enabled != self.featureEnabled else { return }
         self.featureEnabled = enabled
+        if !enabled { self.invalidateOutputCommands() }
         self.refreshAll()
       }
     })
@@ -116,6 +126,10 @@ final class AudioStudioService: ObservableObject {
   var isPerAppMixerSupported: Bool {
     if #available(macOS 14.4, *) { return true }
     return false
+  }
+
+  var selectedOutputSymbol: String {
+    outputDevices.first { $0.id == selectedOutputID }?.kind.symbol ?? "speaker.wave.2.fill"
   }
 
   func startMonitoringApps() {
@@ -141,11 +155,19 @@ final class AudioStudioService: ObservableObject {
     }
     refreshInFlight = true
     let revision = engineBuilds.revision
+    let outputRevision = outputTransactions.current
+    let masterWriteWasPending = pendingMasterWrite != nil
     Task {
       let snapshot = await Task.detached(priority: .utility) {
         Self.readSnapshot()
       }.value
-      if engineBuilds.revision == revision, !sleeping { apply(snapshot) }
+      if engineBuilds.revision == revision, !sleeping {
+        if outputTransactions.current == outputRevision {
+          apply(snapshot, updateMaster: !masterWriteWasPending && pendingMasterWrite == nil)
+        } else {
+          refreshPending = true
+        }
+      }
       refreshInFlight = false
       if refreshPending {
         refreshPending = false
@@ -156,42 +178,90 @@ final class AudioStudioService: ObservableObject {
 
   func setMasterVolume(_ value: Double) {
     guard SensePillar.audioStudio.isEnabled() else { return }
-    guard canAdjustMasterVolume, value.isFinite else { return }
+    guard !sleeping, !isSwitchingOutput, canAdjustMasterVolume, value.isFinite else { return }
     let clamped = min(1, max(0, value))
     masterVolume = clamped
     isMasterMuted = clamped < 0.005
-    let device = outputDeviceID
-    Task.detached(priority: .userInitiated) {
-      _ = Self.writeOutputVolume(clamped, deviceID: device)
-      _ = Self.writeOutputMute(clamped < 0.005, deviceID: device)
-    }
+    if clamped >= 0.005, let uid = outputDeviceUID { lastAudibleMasterVolumes[uid] = clamped }
+    writeMasterState()
   }
 
   func toggleMasterMute() {
     guard SensePillar.audioStudio.isEnabled() else { return }
-    guard canMuteMaster else { return }
-    isMasterMuted.toggle()
-    let muted = isMasterMuted
-    let device = outputDeviceID
-    Task.detached(priority: .userInitiated) {
-      _ = Self.writeOutputMute(muted, deviceID: device)
+    guard !sleeping, !isSwitchingOutput, canMuteMaster else { return }
+    if !isMasterMuted, masterVolume >= 0.005, let uid = outputDeviceUID {
+      lastAudibleMasterVolumes[uid] = masterVolume
     }
+    isMasterMuted.toggle()
+    if canAdjustMasterVolume {
+      if !hasNativeMute && isMasterMuted { masterVolume = 0 }
+      else if !isMasterMuted && masterVolume < 0.005 {
+        masterVolume = outputDeviceUID.flatMap { lastAudibleMasterVolumes[$0] } ?? 0.5
+      }
+    }
+    writeMasterState()
+  }
+
+  private func writeMasterState() {
+    guard let uid = outputDeviceUID, outputDeviceID != kAudioObjectUnknown else { refreshAll(); return }
+    let device = outputDeviceID
+    let volume = masterVolume
+    let muted = isMasterMuted
+    let writesVolume = canAdjustMasterVolume
+    let writesMute = hasNativeMute
+    let ticket = outputTransactions.invalidate()
+    pendingMasterWrite = ticket
+    masterControlFailed = false
+    Task {
+      let success = await outputTransactions.perform(ticket) {
+        guard Self.isCurrentOutput(device, uid: uid) else { return false }
+        var success = true
+        if writesVolume { success = Self.writeOutputVolume(volume, deviceID: device) }
+        // Recheck route identity between native calls, including AudioObjectID reuse.
+        if writesMute {
+          guard Self.isCurrentOutput(device, uid: uid) else { return false }
+          success = Self.writeOutputMute(muted, deviceID: device) && success
+        }
+        return success
+      }
+      guard outputTransactions.current == ticket else { return }
+      pendingMasterWrite = nil
+      masterControlFailed = success != true
+      refreshAll()
+    }
+  }
+
+  private func invalidateOutputCommands() {
+    outputTransactions.invalidate()
+    pendingMasterWrite = nil
+    isSwitchingOutput = false
   }
 
   func selectOutput(_ device: AudioOutputDevice) {
     guard SensePillar.audioStudio.isEnabled() else { return }
-    guard !isSwitchingOutput, device.id != selectedOutputID else { return }
+    guard !sleeping, !isSwitchingOutput, device.id != selectedOutputID,
+          outputDevices.contains(where: { $0.id == device.id && $0.uid == device.uid }) else { return }
+    invalidateOutputCommands()
+    let ticket = outputTransactions.current
     isSwitchingOutput = true
     outputSwitchFailed = false
     Task {
-      let success = await Task.detached(priority: .userInitiated) {
+      let result = await outputTransactions.perform(ticket) {
+        guard Self.stringProperty(device.id, selector: kAudioDevicePropertyDeviceUID) == device.uid else {
+          return (false, Self.readSnapshot())
+        }
         var id = device.id
-        return Self.write(
+        let success = Self.write(
           AudioObjectID(kAudioObjectSystemObject),
           selector: kAudioHardwarePropertyDefaultOutputDevice,
           scope: kAudioObjectPropertyScopeGlobal, value: &id)
-      }.value
-      outputSwitchFailed = !success
+        return (success, Self.readSnapshot())
+      }
+      guard outputTransactions.current == ticket else { return }
+      if let result {
+        apply(result.1, updateMaster: true)
+        outputSwitchFailed = !result.0 || outputDeviceID != device.id || outputDeviceUID != device.uid
+      } else { outputSwitchFailed = true }
       isSwitchingOutput = false
       refreshAll()
     }
@@ -226,17 +296,29 @@ final class AudioStudioService: ObservableObject {
     }
   }
 
-  private func apply(_ snapshot: AudioSnapshot) {
+  private func apply(_ snapshot: AudioSnapshot, updateMaster: Bool) {
     guard SensePillar.audioStudio.isEnabled(), !sleeping else { return }
     updateProcessListeners(snapshot.processes.flatMap(\.objects))
+    let uid = snapshot.outputs.first { $0.id == snapshot.outputDeviceID }?.uid
+    let changedRoute = outputDeviceID != snapshot.outputDeviceID || outputDeviceUID != uid
+    if changedRoute && !isSwitchingOutput {
+      invalidateOutputCommands()
+      masterControlFailed = false
+      outputSwitchFailed = false
+    }
     outputDeviceID = snapshot.outputDeviceID
+    outputDeviceUID = uid
     selectedOutputID = snapshot.outputDeviceID
     outputDevices = snapshot.outputs
-    canAdjustMasterVolume = snapshot.canAdjustVolume
-    canMuteMaster = snapshot.canMute
+    canAdjustMasterVolume = snapshot.canAdjustVolume && snapshot.outputVolume != nil && uid != nil
+    hasNativeMute = snapshot.canMute
+    canMuteMaster = snapshot.canMute || snapshot.canAdjustVolume
     outputDeviceName = snapshot.outputDeviceName
-    masterVolume = snapshot.outputVolume ?? 0
-    isMasterMuted = snapshot.outputMuted ?? false
+    updateOutputListeners(snapshot.outputDeviceID)
+    if updateMaster || changedRoute {
+      masterVolume = snapshot.outputVolume ?? 0
+      isMasterMuted = snapshot.outputMuted == true || (snapshot.outputVolume.map { $0 < 0.005 } ?? false)
+    }
     if outputDeviceID == kAudioObjectUnknown { stopAllEngines() }
 
     var owned: [pid_t: (app: NSRunningApplication, objects: [AudioObjectID], playing: Bool)] = [:]
@@ -412,15 +494,39 @@ final class AudioStudioService: ObservableObject {
     }
   }
 
-  private func listen(object: AudioObjectID, selector: AudioObjectPropertySelector) {
+  private func listen(object: AudioObjectID, selector: AudioObjectPropertySelector,
+                      scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) {
     var address = AudioObjectPropertyAddress(
       mSelector: selector,
-      mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+      mScope: scope, mElement: kAudioObjectPropertyElementMain)
     let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-      Task { @MainActor [weak self] in self?.scheduleEventRefresh() }
+      Task { @MainActor [weak self] in
+        guard let self else { return }
+        if selector == kAudioHardwarePropertyDefaultOutputDevice || selector == kAudioHardwarePropertyDevices {
+          if !self.isSwitchingOutput { self.invalidateOutputCommands() }
+        }
+        self.scheduleEventRefresh()
+      }
     }
     if AudioObjectAddPropertyListenerBlock(object, &address, .main, block) == noErr {
       audioListeners.append((object, address, block))
+    }
+  }
+
+  private func updateOutputListeners(_ device: AudioObjectID) {
+    guard watchedOutput != device else { return }
+    for index in audioListeners.indices.reversed() {
+      let item = audioListeners[index]
+      if item.0 == watchedOutput && item.1.mScope == kAudioObjectPropertyScopeOutput {
+        var address = item.1
+        AudioObjectRemovePropertyListenerBlock(item.0, &address, .main, item.2)
+        audioListeners.remove(at: index)
+      }
+    }
+    watchedOutput = device
+    guard device != kAudioObjectUnknown else { return }
+    for selector in Self.volumeSelectors + [kAudioDevicePropertyMute] {
+      listen(object: device, selector: selector, scope: kAudioObjectPropertyScopeOutput)
     }
   }
 
@@ -470,6 +576,9 @@ private struct AudioSnapshot: Sendable {
 }
 
 extension AudioStudioService {
+  fileprivate nonisolated static func isCurrentOutput(_ id: AudioObjectID, uid: String) -> Bool {
+    defaultOutputDeviceID() == id && stringProperty(id, selector: kAudioDevicePropertyDeviceUID) == uid
+  }
   fileprivate nonisolated static func readSnapshot() -> AudioSnapshot {
     let device = defaultOutputDeviceID() ?? kAudioObjectUnknown
     return AudioSnapshot(
@@ -502,11 +611,23 @@ extension AudioStudioService {
         guard AudioObjectGetPropertyDataSize(device, &address, 0, nil, &size) == noErr,
           size >= MemoryLayout<AudioStreamID>.size
         else { return nil }
+        let name = stringProperty(device, selector: kAudioObjectPropertyName) ?? uid
+        var transport: UInt32 = 0
+        _ = read(device, selector: kAudioDevicePropertyTransportType, value: &transport)
+        var terminal: UInt32 = 0
+        for stream in objectList(device, selector: kAudioDevicePropertyStreams, scope: kAudioObjectPropertyScopeOutput) {
+          var value: UInt32 = 0
+          if read(stream, selector: kAudioStreamPropertyTerminalType, value: &value) {
+            terminal = value
+            if value == kAudioStreamTerminalTypeHeadphones { break }
+          }
+        }
         return AudioOutputDevice(
           id: device,
           uid: uid,
-          name: stringProperty(device, selector: kAudioObjectPropertyName) ?? uid,
-          canAdjustVolume: volumeSelectors.contains { isSettable(device, selector: $0) }
+          name: name,
+          canAdjustVolume: volumeSelectors.contains { isSettable(device, selector: $0) },
+          kind: .classify(name: name, transport: transport, terminal: terminal)
         )
       }
       .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -572,7 +693,7 @@ extension AudioStudioService {
     for selector in volumeSelectors {
       var value: Float32 = 0
       if read(deviceID, selector: selector, scope: kAudioDevicePropertyScopeOutput, value: &value) {
-        return value
+        return value.isFinite ? min(1, max(0, value)) : nil
       }
     }
     return nil
@@ -628,11 +749,12 @@ extension AudioStudioService {
 
   fileprivate nonisolated static func objectList(
     _ object: AudioObjectID,
-    selector: AudioObjectPropertySelector
+    selector: AudioObjectPropertySelector,
+    scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
   ) -> [AudioObjectID] {
     var address = AudioObjectPropertyAddress(
       mSelector: selector,
-      mScope: kAudioObjectPropertyScopeGlobal,
+      mScope: scope,
       mElement: kAudioObjectPropertyElementMain
     )
     var size: UInt32 = 0

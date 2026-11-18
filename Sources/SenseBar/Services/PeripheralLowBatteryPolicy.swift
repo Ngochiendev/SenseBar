@@ -1,7 +1,7 @@
 import Foundation
 
 /// A low-battery episode ends only after observed recovery, not after a timer or reconnect.
-struct PeripheralLowBatteryPolicy {
+struct PeripheralLowBatteryPolicy: Codable {
     private(set) var lastPresented: [String: Date]
     private(set) var recoveryComponents: [String: [String]]
 
@@ -32,14 +32,22 @@ struct PeripheralLowBatteryPolicy {
         return true
     }
 
-    mutating func recordPresentation(id: String, reading: DeviceBatteryReading, now: Date = Date()) {
+    mutating func recordPresentation(id: String, reading: DeviceBatteryReading, threshold: Int = 20, now: Date = Date()) {
         if lastPresented.count >= 512, lastPresented[id] == nil,
            let oldest = lastPresented.min(by: { $0.value < $1.value })?.key {
             lastPresented.removeValue(forKey: oldest)
             recoveryComponents.removeValue(forKey: oldest)
         }
         lastPresented[id] = now
-        recoveryComponents[id] = reading.alertComponents.filter { reading.level($0) != nil }.map(\.rawValue)
+        recoveryComponents[id] = reading.alertComponents.filter {
+            guard let level = reading.level($0) else { return false }
+            return level <= Self.threshold(threshold) && reading.isCharging($0) != true
+        }.map(\.rawValue)
+    }
+
+    var persistentHistory: Self {
+        Self(lastPresented: lastPresented.filter { !$0.key.hasPrefix("hid:") },
+             recoveryComponents: recoveryComponents.filter { !$0.key.hasPrefix("hid:") })
     }
 
     static func threshold(_ value: Int) -> Int { min(50, max(5, value)) }
