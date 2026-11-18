@@ -132,7 +132,9 @@ Dữ liệu pin phụ thuộc vào những gì thiết bị và macOS cung cấp
 | **Audio Capture** | Khi mixer cần điều chỉnh app | Áp dụng gain riêng trên máy |
 | **Automation** | Chỉ khi tích hợp trình phát yêu cầu | Gửi lệnh điều khiển phát |
 
-Now Playing, âm thanh và thông tin thiết bị được xử lý trên máy. SenseBar không có tài khoản, quảng cáo hoặc telemetry riêng. Kiểm tra cập nhật sử dụng Sparkle qua HTTPS tới appcast đã ký (`updates.sensebar.site`) và có thể kiểm tra thủ công hoặc tắt tự động kiểm tra trong Cài đặt.
+SenseBar xử lý âm thanh và dữ liệu thiết bị trên máy. Khi Zen Browser thiếu ảnh bìa, SenseBar đọc tiêu đề và URL của các tab trong tệp khôi phục phiên trên máy. Nếu tìm thấy video phù hợp, ứng dụng gửi ID video đến YouTube để tải ảnh thu nhỏ. Nếu phát hiện YouTube Music nhưng chưa tìm được ID video, ứng dụng có thể gửi tên bài và nghệ sĩ đến dịch vụ tìm kiếm iTunes của Apple để lấy ảnh bìa.
+
+SenseBar không có tài khoản, quảng cáo hoặc telemetry riêng. Kiểm tra cập nhật sử dụng Sparkle qua HTTPS tới appcast đã ký (`updates.sensebar.site`) và có thể kiểm tra thủ công hoặc tắt tự động kiểm tra trong Cài đặt.
 
 ## Build nhanh
 
@@ -264,7 +266,9 @@ Battery detail depends on information exposed by the accessory and macOS. Some d
 | **Audio Capture** | The mixer adjusts an app | Apply per-app gain locally |
 | **Automation** | A player integration requires it | Send playback commands |
 
-Now Playing, audio, and device information are processed locally. SenseBar has no accounts, ads, or first-party telemetry. Update checks use Sparkle over HTTPS against a signed appcast (`updates.sensebar.site`) and can be run manually or disabled in Settings.
+SenseBar processes audio and device data locally. When artwork is missing in Zen Browser, SenseBar reads tab titles and URLs from local session recovery files. If it finds a matching video, it sends the video ID to YouTube to fetch a thumbnail. If it detects YouTube Music but cannot find a matching video ID, it may send the track title and artist to Apple’s iTunes Search service to fetch cover art.
+
+SenseBar has no accounts, ads, or first-party telemetry. Update checks use Sparkle over HTTPS against a signed appcast (`updates.sensebar.site`) and can be run manually or disabled in Settings.
 
 ## Quick build
 
@@ -303,6 +307,7 @@ The `defaults delete` command removes all local SenseBar preferences.
 
 [Releases](https://github.com/Ngochiendev/SenseBar/releases) ·
 [Contributing](CONTRIBUTING.md) ·
+[Code of Conduct](CODE_OF_CONDUCT.md) ·
 [Security](SECURITY.md)
 
 Source code: [GPL-3.0](LICENSE). CrossPet character artwork is licensed separately
