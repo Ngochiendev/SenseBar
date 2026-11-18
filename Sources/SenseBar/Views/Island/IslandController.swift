@@ -63,6 +63,11 @@ final class IslandController: ObservableObject {
     private var mainPanel: IslandPanel?
     private var mirrorPanels: [CGDirectDisplayID: IslandPanel] = [:]
 
+    var hasVisibleNoticeSurface: Bool {
+        if let mainPanel, mainPanel.wantsVisible, mainPanel.isVisible { return true }
+        return mirrorPanels.values.contains { $0.wantsVisible && $0.isVisible }
+    }
+
     private var mouseMonitor: Any?
     private var localMouseMonitor: Any?
     private var screenObserver: NSObjectProtocol?

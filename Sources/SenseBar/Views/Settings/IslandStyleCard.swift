@@ -9,6 +9,7 @@ struct IslandStyleCard: View {
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
     @AppStorage(DefaultsKey.notchDeviceNotices) private var deviceNotices = true
     @AppStorage(DefaultsKey.notchLowPeripheralBattery) private var lowBattery = true
+    @AppStorage(DefaultsKey.peripheralBatteryThreshold) private var batteryThreshold = 20
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -42,11 +43,26 @@ struct IslandStyleCard: View {
                 )
                 Divider().opacity(0.35)
                 noticeToggle(
-                    l10n.string(vi: "Cảnh báo pin phụ kiện (20% và 10%)", en: "Accessory low battery (20% and 10%)"),
+                    l10n.string(vi: "Cảnh báo pin phụ kiện", en: "Accessory low battery"),
                     isOn: $lowBattery
                 )
                     .disabled(!deviceNotices)
                     .opacity(deviceNotices ? 1 : 0.48)
+                if deviceNotices && lowBattery {
+                    Divider().opacity(0.35)
+                    HStack {
+                        Text(l10n.string(vi: "Nhắc khi pin còn", en: "Alert at"))
+                            .font(.system(size: 11))
+                        Spacer()
+                        Picker(l10n.string(vi: "Ngưỡng pin yếu", en: "Low battery threshold"), selection: $batteryThreshold) {
+                            ForEach(Array(stride(from: 5, through: 50, by: 5)), id: \.self) { level in
+                                Text("\(level)%").tag(level)
+                            }
+                        }
+                        .labelsHidden().frame(width: 76).controlSize(.small)
+                    }
+                    .padding(.vertical, 8)
+                }
             }
             .padding(.horizontal, 10)
             .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 11, style: .continuous))

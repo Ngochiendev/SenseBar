@@ -133,25 +133,6 @@ final class HIDPeripheralMonitor: @unchecked Sendable {
     }
 
     private static func battery(_ values: [String: Any]) -> DeviceBatteryReading? {
-        guard let percent = (values["BatteryPercent"] as? NSNumber)?.doubleValue,
-              percent.isFinite, (0...100).contains(percent) else { return nil }
-        return DeviceBatteryReading(percent: Int(percent.rounded()))
-    }
-}
-
-/// One alert per low-battery episode, with recovery hysteresis and a critical escalation.
-struct PeripheralLowBatteryPolicy {
-    private var announced: [String: Int] = [:]
-    mutating func consume(id: String, reading: DeviceBatteryReading) -> Int? {
-        let levels = [reading.percent, reading.left, reading.right, reading.casePercent]
-            .compactMap { $0 }.filter { (0...100).contains($0) }
-        guard let percent = levels.min() else { return nil }
-        if percent >= 25 { announced.removeValue(forKey: id); return nil }
-        guard percent <= 20 else { return nil }
-        let stage = percent <= 10 ? 10 : 20
-        guard announced[id].map({ stage < $0 }) ?? true else { return nil }
-        if announced.count >= 128, announced[id] == nil { announced.removeAll() }
-        announced[id] = stage
-        return percent
+        DeviceBatteryReading.hid(values)
     }
 }

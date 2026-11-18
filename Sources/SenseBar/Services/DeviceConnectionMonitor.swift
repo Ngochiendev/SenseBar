@@ -1,19 +1,14 @@
 import Foundation
 import IOBluetooth
 import IOKit
+import IOKit.ps
+import ObjectiveC
 
 enum DeviceConnectionEvent: Sendable {
     case observed(id: String, name: String, symbol: String, reading: DeviceBatteryReading?, announce: Bool)
     case connected(id: String, name: String, symbol: String)
     case battery(id: String, reading: DeviceBatteryReading)
     case disconnected(id: String)
-}
-
-struct DeviceBatteryReading: Equatable, Sendable {
-    var percent: Int?
-    var left: Int?
-    var right: Int?
-    var casePercent: Int?
 }
 
 /// Native Bluetooth calls stay on one stable run loop, including observer cleanup.
@@ -29,13 +24,17 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
     private var disconnectTokens: [String: IOBluetoothUserNotification] = [:]
     private var connected = Set<String>()
     private var connectionEpochs: [String: UUID] = [:]
+    private var powerIdentifiers: [String: String] = [:]
     private var hid: HIDPeripheralMonitor?
+    private var powerSourceNotifications: CFRunLoopSource?
     private var batteryTimer: Timer?
     private var batteryRefreshPending = false
     private var batteryRefreshRequested = false
     private var names: [String: (name: String, symbol: String)] = [:]
     private let deliver: @Sendable (DeviceConnectionEvent) -> Void
     private let batteryQueue = DispatchQueue(label: "SenseBar.device-battery", qos: .utility)
+    // Owned by batteryQueue; a reconnect invalidates the entire cached profiler snapshot.
+    private var profilerCache: (generation: Int, connections: [String: UUID], date: Date, data: Data?)?
 
     init(deliver: @escaping @Sendable (DeviceConnectionEvent) -> Void) { self.deliver = deliver }
 
@@ -66,6 +65,10 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
 
     private func synchronize() {
         hid?.stop(); hid = nil
+        if let powerSourceNotifications {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), powerSourceNotifications, .commonModes)
+        }
+        powerSourceNotifications = nil
         batteryTimer?.invalidate(); batteryTimer = nil
         connectToken?.unregister()
         connectToken = nil
@@ -73,6 +76,7 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
         disconnectTokens.removeAll()
         connected.removeAll()
         connectionEpochs.removeAll()
+        powerIdentifiers.removeAll()
         names.removeAll()
         guard lock.withLock({ desired }) else { return }
         let epoch = lock.withLock { generation }
@@ -86,6 +90,7 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
                     let symbol = name.lowercased().contains("airpods") ? "airpods" : major == 5 ? "computermouse" : "headphones"
                     names[id] = (name, symbol)
                     connectionEpochs[id] = UUID()
+                    powerIdentifiers[id] = Self.powerIdentifier(device)
                     deliver(.observed(id: id, name: name, symbol: symbol, reading: nil, announce: false))
                 }
             }
@@ -95,13 +100,73 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
             selector: #selector(didConnect(_:device:)))
         hid = HIDPeripheralMonitor { [weak self] event in
             guard let self, self.isActive(epoch) else { return }
-            self.deliver(event)
+            switch event {
+            case let .observed(id, name, symbol, reading, announce):
+                self.names[id] = (name, symbol)
+                if self.connectionEpochs[id] == nil { self.connectionEpochs[id] = UUID() }
+                self.deliver(.observed(id: id, name: name, symbol: symbol, reading: nil, announce: announce))
+                guard let reading else { return }
+                let connection = self.connectionEpochs[id]
+                let powerIdentifier = self.powerIdentifiers[id]
+                self.batteryQueue.async { [self] in
+                    let sources = isActive(epoch) ? AccessoryPowerSourceReader.read() : []
+                    let power = AccessoryPowerSourceReader.battery(in: sources, address: id, identifier: powerIdentifier)
+                    let profiler = profilerCache.flatMap { cache -> DeviceBatteryReading? in
+                        guard cache.generation == epoch, cache.connections[id] == connection,
+                              (0...300).contains(Date().timeIntervalSince(cache.date)), let data = cache.data else { return nil }
+                        return Self.battery(in: data, address: id)
+                    }
+                    let baseline = reading.fillingMissing(from: profiler)
+                    let enriched = power?.fillingMissing(from: baseline) ?? baseline
+                    onWorker { [self] in
+                        guard isActive(epoch), connectionEpochs[id] == connection, names[id] != nil else { return }
+                        deliver(.battery(id: id, reading: enriched))
+                    }
+                }
+            case let .disconnected(id):
+                // A second HID service can disappear while the native Bluetooth link is still live.
+                guard !self.connected.contains(id) else { return }
+                self.names.removeValue(forKey: id)
+                self.connectionEpochs.removeValue(forKey: id)
+                self.powerIdentifiers.removeValue(forKey: id)
+                self.deliver(event)
+            default: self.deliver(event)
+            }
         }
         hid?.start()
+        powerSourceNotifications = IOPSNotificationCreateRunLoopSource({ context in
+            guard let context else { return }
+            let owner = Unmanaged<DeviceConnectionMonitor>.fromOpaque(context).takeUnretainedValue()
+            owner.onWorker { [weak owner] in owner?.refreshBatteryPowerStates() }
+        }, Unmanaged.passUnretained(self).toOpaque())?.takeRetainedValue()
+        if let powerSourceNotifications {
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), powerSourceNotifications, .commonModes)
+        }
         refreshBatteries()
     }
 
+    /// Power changes refresh charging state without spawning system_profiler on every notification.
+    private func refreshBatteryPowerStates() {
+        guard lock.withLock({ desired }), !names.isEmpty else { return }
+        refreshBatteryReadings()
+    }
+
     private func isActive(_ epoch: Int) -> Bool { lock.withLock { desired && generation == epoch } }
+
+    /// Optional native UUID getter; validate its ObjC signature before invoking private API.
+    /// Missing or incompatible getters leave accessory charging unknown.
+    private static func powerIdentifier(_ device: IOBluetoothDevice) -> String? {
+        let selector = NSSelectorFromString("identifier")
+        guard device.responds(to: selector),
+              let method = class_getInstanceMethod(type(of: device), selector),
+              method_getNumberOfArguments(method) == 2 else { return nil }
+        let returnType = method_copyReturnType(method)
+        defer { free(returnType) }
+        guard String(cString: returnType).hasPrefix("@"),
+              let value = device.perform(selector)?.takeUnretainedValue() else { return nil }
+        if let uuid = value as? UUID { return uuid.uuidString }
+        return (value as? String).flatMap(UUID.init(uuidString:))?.uuidString
+    }
 
     private func observeDisconnect(_ device: IOBluetoothDevice, id: String) {
         guard disconnectTokens[id] == nil else { return }
@@ -167,6 +232,7 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
         names[id] = (name, symbol)
         let connectionEpoch = UUID()
         connectionEpochs[id] = connectionEpoch
+        powerIdentifiers[id] = Self.powerIdentifier(device)
         refreshBatteries()
     }
 
@@ -184,6 +250,7 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
         disconnectTokens.removeValue(forKey: id)?.unregister()
         connected.remove(id)
         connectionEpochs.removeValue(forKey: id)
+        powerIdentifiers.removeValue(forKey: id)
         names.removeValue(forKey: id)
         if names.isEmpty { batteryTimer?.invalidate(); batteryTimer = nil }
         if lock.withLock({ desired }) { deliver(.disconnected(id: id)) }
@@ -202,12 +269,29 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
         let epoch = lock.withLock { generation }
         let devices = names
         let epochs = connectionEpochs
+        let identifiers = powerIdentifiers
         batteryRefreshPending = true
         batteryQueue.async { [self] in
-            let data = isActive(epoch) ? Self.readBluetoothData() : nil
+            guard isActive(epoch) else {
+                onWorker { [self] in batteryRefreshPending = false; refreshBatteries() }
+                return
+            }
+            let now = Date()
+            let data: Data?
+            if let cache = profilerCache, cache.generation == epoch, cache.connections == epochs,
+               (0..<(cache.data == nil ? 30.0 : 300.0)).contains(now.timeIntervalSince(cache.date)) {
+                data = cache.data
+            } else {
+                data = Self.readBluetoothData()
+                profilerCache = (epoch, epochs, now, data)
+            }
+            let powerSources = isActive(epoch) ? AccessoryPowerSourceReader.read() : []
             let readings = devices.keys.reduce(into: [String: DeviceBatteryReading]()) { result, id in
-                result[id] = Self.readHIDBattery(address: id).map { DeviceBatteryReading(percent: $0) }
-                    ?? data.flatMap { Self.battery(in: $0, address: id) }
+                let profiler = data.flatMap { Self.battery(in: $0, address: id) }
+                let hid = Self.readHIDBattery(address: id)
+                let power = AccessoryPowerSourceReader.battery(in: powerSources, address: id, identifier: identifiers[id])
+                let baseline = hid?.fillingMissing(from: profiler) ?? profiler
+                result[id] = power?.fillingMissing(from: baseline) ?? baseline
             }
             onWorker { [self] in
                 batteryRefreshPending = false
@@ -268,15 +352,10 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
     }
 
     private static func validPercent(_ value: Any?) -> Int? {
-        let number: Double?
-        if let raw = value as? String {
-            number = Double(raw.replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces))
-        } else { number = (value as? NSNumber)?.doubleValue }
-        guard let number, number.isFinite, (0...100).contains(number) else { return nil }
-        return Int(number.rounded())
+        DeviceBatteryReading.validPercent(value)
     }
 
-    private static func readHIDBattery(address: String) -> Int? {
+    private static func readHIDBattery(address: String) -> DeviceBatteryReading? {
         func normalized(_ value: String) -> String {
             value.lowercased().filter { $0.isHexDigit }
         }
@@ -295,7 +374,7 @@ final class DeviceConnectionMonitor: NSObject, @unchecked Sendable {
                       let values = properties?.takeRetainedValue() as? [String: Any] else { continue }
                 let ids = [values["DeviceAddress"], values["BluetoothAddress"], values["SerialNumber"]]
                 guard ids.contains(where: { ($0 as? String).map { normalized($0) == normalized(address) } ?? false }) else { continue }
-                if let percent = validPercent(values["BatteryPercent"]) { return percent }
+                if let reading = DeviceBatteryReading.hid(values) { return reading }
             }
         }
         return nil

@@ -60,6 +60,8 @@ struct IslandDeviceNotice: Equatable, Identifiable {
     var percent: Int?
     let created: Date
     var batteryDetail: String? = nil
+    var batteryReading: DeviceBatteryReading? = nil
+    var batteryComponent: DeviceBatteryReading.Component? = nil
 }
 
 /// A Bluetooth link can survive AirPods auto-switching; output activation is
@@ -90,8 +92,25 @@ final class DeviceNoticeService: ObservableObject {
     private var started = false
     private var devices: [String: (name: String, symbol: String)] = [:]
     private var lowBattery = PeripheralLowBatteryPolicy()
+    private var batteryReadings: [String: DeviceBatteryReading] = [:]
     private var lastConnectionNotices: [String: Date] = [:]
     private var audioTransitions = AudioAccessoryTransitions()
+
+    private init() {
+        let saved = UserDefaults.standard.dictionary(forKey: DefaultsKey.peripheralBatteryLastPresented)
+        let parts = UserDefaults.standard.dictionary(forKey: DefaultsKey.peripheralBatteryRecoveryComponents)
+        lowBattery = PeripheralLowBatteryPolicy(lastPresented: saved as? [String: Date] ?? [:],
+                                               recoveryComponents: parts as? [String: [String]] ?? [:])
+    }
+
+    private var batteryThreshold: Int {
+        let value = UserDefaults.standard.object(forKey: DefaultsKey.peripheralBatteryThreshold) as? Int ?? 20
+        return PeripheralLowBatteryPolicy.threshold(value)
+    }
+
+    private var batteryAlertsEnabled: Bool {
+        UserDefaults.standard.object(forKey: DefaultsKey.notchLowPeripheralBattery) as? Bool ?? true
+    }
 
     enum Preview: CaseIterable {
         case airpods, keyboard, charging, unplugged, lowBattery
@@ -117,7 +136,8 @@ final class DeviceNoticeService: ObservableObject {
         switch kind {
         case .airpods:
             notice = IslandDeviceNotice(id: "preview-airpods", title: "AirPods Pro", detail: connected,
-                symbol: "airpodspro", percent: 88, created: Date())
+                symbol: "airpodspro", percent: 88, created: Date(),
+                batteryReading: DeviceBatteryReading(left: 88, right: 92, casePercent: 64))
         case .keyboard:
             notice = IslandDeviceNotice(id: "preview-keyboard", title: "Flow84@Lofree", detail: connected,
                 symbol: "keyboard", percent: 50, created: Date())
@@ -164,6 +184,7 @@ final class DeviceNoticeService: ObservableObject {
             self?.sleeping = true
             self?.pending.removeAll()
             self?.devices.removeAll()
+            self?.batteryReadings.removeAll()
             self?.dismissCurrent()
             self?.bluetooth?.setEnabled(false)
         }.store(in: &subscriptions)
@@ -177,7 +198,18 @@ final class DeviceNoticeService: ObservableObject {
             .receive(on: RunLoop.main).sink { [weak self] _ in
             guard let self else { return }
             self.bluetooth?.setEnabled(self.canMonitorBluetooth && !self.sleeping)
-            if !self.enabled { self.pending.removeAll(); self.devices.removeAll(); self.dismissCurrent() }
+            if !self.enabled {
+                self.pending.removeAll(); self.devices.removeAll(); self.batteryReadings.removeAll(); self.dismissCurrent()
+            } else {
+                self.pending.removeAll { $0.id.hasPrefix("low:") }
+                if let current = self.current, current.id.hasPrefix("low:") {
+                    let id = String(current.id.dropFirst(4))
+                    if !self.batteryAlertsEnabled || self.batteryReadings[id].flatMap({
+                        self.lowBattery.candidate(reading: $0, threshold: self.batteryThreshold)
+                    }) == nil { self.dismissCurrent() }
+                }
+                self.presentNext()
+            }
         }.store(in: &subscriptions)
         bluetooth = DeviceConnectionMonitor { [weak self] event in
             Task { @MainActor in self?.receive(event) }
@@ -224,34 +256,45 @@ final class DeviceNoticeService: ObservableObject {
         case let .connected(id, name, symbol):
             announceConnection(id: id, name: name, symbol: symbol)
         case let .battery(id, reading):
-            let l10n = L10n.shared
-            var parts: [String] = []
-            if let left = reading.left { parts.append(l10n.string(vi: "T", en: "L") + " \(left)%") }
-            if let right = reading.right { parts.append(l10n.string(vi: "P", en: "R") + " \(right)%") }
-            if let level = reading.casePercent { parts.append(l10n.string(vi: "Hộp", en: "Case") + " \(level)%") }
-            if UserDefaults.standard.object(forKey: DefaultsKey.notchLowPeripheralBattery) as? Bool ?? true,
-               let percent = lowBattery.consume(id: id, reading: reading),
-               let device = devices[id] {
-                let warning = l10n.string(vi: percent <= 10 ? "Pin rất yếu" : "Pin yếu",
-                                          en: percent <= 10 ? "Battery very low" : "Low battery")
-                enqueue(IslandDeviceNotice(id: "low:" + id, title: device.name,
-                    detail: warning + (parts.isEmpty ? "" : " · " + parts.joined(separator: " · ")),
-                    symbol: device.symbol, percent: percent, created: Date()))
+            batteryReadings[id] = reading
+            if lowBattery.observeRecovery(id: id, reading: reading, threshold: batteryThreshold) {
+                saveBatteryHistory()
+            }
+            pending.removeAll { $0.id == "low:" + id }
+            if current?.id == "low:" + id {
+                if let updated = lowBatteryNotice(id: id, reading: reading) { current = updated }
+                else { dismissCurrent(); presentNext() }
+            } else if batteryAlertsEnabled, lowBattery.canPresent(id: id),
+                      let notice = lowBatteryNotice(id: id, reading: reading) {
+                enqueue(notice)
             }
             if current?.id == id || (current?.id.hasPrefix("audio:") == true && current?.title == devices[id]?.name) {
-                current?.percent = reading.percent
-                if !parts.isEmpty { current?.batteryDetail = parts.joined(separator: " · ") }
+                current?.percent = reading.displayedPercent
+                current?.batteryReading = reading
             }
             if let index = pending.firstIndex(where: { $0.id == id
                 || ($0.id.hasPrefix("audio:") && $0.title == devices[id]?.name) }) {
-                pending[index].percent = reading.percent
-                if !parts.isEmpty { pending[index].batteryDetail = parts.joined(separator: " · ") }
+                pending[index].percent = reading.displayedPercent
+                pending[index].batteryReading = reading
             }
         case let .disconnected(id):
             devices.removeValue(forKey: id)
+            batteryReadings.removeValue(forKey: id)
             pending.removeAll { $0.id == id || $0.id == "low:" + id }
             if current?.id == id || current?.id == "low:" + id { dismissCurrent(); presentNext() }
         }
+    }
+
+    private func lowBatteryNotice(id: String, reading: DeviceBatteryReading) -> IslandDeviceNotice? {
+        guard batteryAlertsEnabled,
+              let component = lowBattery.candidate(reading: reading, threshold: batteryThreshold),
+              let percent = reading.level(component), let device = devices[id] else { return nil }
+        let l10n = L10n.shared
+        return IslandDeviceNotice(id: "low:" + id, title: device.name,
+            detail: l10n.string(vi: percent <= 10 ? "Pin rất yếu" : "Pin yếu",
+                                en: percent <= 10 ? "Battery very low" : "Low battery"),
+            symbol: device.symbol, percent: percent, created: Date(),
+            batteryReading: reading, batteryComponent: component)
     }
 
     private func announceConnection(id: String, name: String, symbol: String) {
@@ -279,7 +322,24 @@ final class DeviceNoticeService: ObservableObject {
         guard enabled, !sleeping, current == nil, !IslandController.shared.isExpanded else { return }
         pending.removeAll { Date().timeIntervalSince($0.created) > 12 }
         guard !pending.isEmpty else { return }
-        current = pending.removeFirst()
+        while !pending.isEmpty {
+            var next = pending.removeFirst()
+            if next.id.hasPrefix("low:") {
+                guard IslandController.shared.hasVisibleNoticeSurface else {
+                    pending.insert(next, at: 0)
+                    return
+                }
+                let id = String(next.id.dropFirst(4))
+                guard lowBattery.canPresent(id: id), let reading = batteryReadings[id],
+                      let refreshed = lowBatteryNotice(id: id, reading: reading) else { continue }
+                next = refreshed
+                lowBattery.recordPresentation(id: id, reading: reading)
+                saveBatteryHistory()
+            }
+            current = next
+            break
+        }
+        guard current != nil else { return }
         scheduleDismissal()
     }
 
@@ -292,6 +352,13 @@ final class DeviceNoticeService: ObservableObject {
             self?.current = nil
             self?.presentNext()
         }
+    }
+
+    private func saveBatteryHistory() {
+        UserDefaults.standard.set(lowBattery.lastPresented.filter { !$0.key.hasPrefix("hid:") },
+                                  forKey: DefaultsKey.peripheralBatteryLastPresented)
+        UserDefaults.standard.set(lowBattery.recoveryComponents.filter { !$0.key.hasPrefix("hid:") },
+                                  forKey: DefaultsKey.peripheralBatteryRecoveryComponents)
     }
 
     private func dismissCurrent() {
