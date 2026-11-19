@@ -9,19 +9,33 @@ import SenseBarAudioBridge
 final class AudioTapEngine: @unchecked Sendable {
   let processObjects: [AudioObjectID]
   let outputDeviceID: AudioObjectID
+  private(set) var processingSampleRate: Double = 48_000
+  private(set) var outputSampleRate: Double = 0
+  private var started = false
 
-  func setGain(_ gain: Float) {
-    renderedGain.value = Self.sanitizedGain(gain) * channelCompensation
+  var outputFormatMatches: Bool {
+    var rate: Double = 0
+    return Self.read(outputDeviceID, selector: kAudioDevicePropertyNominalSampleRate, value: &rate)
+      && abs(rate - outputSampleRate) < 0.1
   }
 
-  private let renderedGain: AtomicFloat
+  /// The service serializes all publications on MainActor after construction.
+  func setConfiguration(gain: Float, equalizer: AppEqualizer) {
+    guard let processor else { return }
+    let curve = equalizer.normalized
+    curve.gains.withUnsafeBufferPointer {
+      SBAudioEqualizerPublish(processor, gain * channelCompensation, $0.baseAddress, curve.enabled)
+    }
+  }
+
+  private var processor: OpaquePointer?
   private let channelCompensation: Float
   private var tapID = AudioObjectID(kAudioObjectUnknown)
   private var aggregateID = AudioObjectID(kAudioObjectUnknown)
   private var ioProc: AudioDeviceIOProcID?
 
   @available(macOS 14.4, *)
-  init?(processObjects: [AudioObjectID], gain: Float, outputDeviceID: AudioObjectID) {
+  init?(processObjects: [AudioObjectID], gain: Float, outputDeviceID: AudioObjectID, equalizer: AppEqualizer = AppEqualizer()) {
     guard !processObjects.isEmpty,
       let outputUID = Self.stringProperty(
         outputDeviceID,
@@ -34,7 +48,7 @@ final class AudioTapEngine: @unchecked Sendable {
     self.processObjects = processObjects
     self.outputDeviceID = outputDeviceID
     self.channelCompensation = compensation
-    self.renderedGain = AtomicFloat(safeGain * compensation)
+    _ = Self.read(outputDeviceID, selector: kAudioDevicePropertyNominalSampleRate, value: &outputSampleRate)
 
     var tap = AudioObjectID(kAudioObjectUnknown)
     var uuidReference: Unmanaged<CFString>?
@@ -80,27 +94,23 @@ final class AudioTapEngine: @unchecked Sendable {
       tapFormat.mFormatID == kAudioFormatLinearPCM,
       tapFormat.mFormatFlags & kAudioFormatFlagIsFloat != 0,
       tapFormat.mBitsPerChannel == 32,
-      tapFormat.mChannelsPerFrame > 0
+      tapFormat.mChannelsPerFrame > 0, tapFormat.mChannelsPerFrame <= 2
     else {
       stop()
       return nil
     }
 
-    let targetGain = renderedGain
-    let renderState = RenderState(initialGain: targetGain.value)
-    let sampleRate = tapFormat.mSampleRate
-    let tapChannels = Int(tapFormat.mChannelsPerFrame)
+    processingSampleRate = tapFormat.mSampleRate
+    let curve = equalizer.normalized
+    let createdProcessor = curve.gains.withUnsafeBufferPointer {
+      SBAudioEqualizerCreate(tapFormat.mSampleRate, safeGain * compensation, $0.baseAddress, curve.enabled)
+    }
+    guard let createdProcessor else { stop(); return nil }
+    processor = createdProcessor
+    let renderState = AudioRenderHandle(processor: createdProcessor)
+    let tapChannels = tapFormat.mChannelsPerFrame
     let renderBlock: AudioDeviceIOBlock = { _, input, _, output, _ in
-      Self.render(
-        inputs: UnsafeMutableAudioBufferListPointer(
-          UnsafeMutablePointer(mutating: input)
-        ),
-        outputs: UnsafeMutableAudioBufferListPointer(output),
-        tapChannels: tapChannels,
-        targetGain: targetGain.value,
-        sampleRate: sampleRate,
-        state: renderState
-      )
+      SBAudioEqualizerRender(renderState.processor, input, output, tapChannels)
     }
     guard
       AudioDeviceCreateIOProcIDWithBlock(
@@ -114,11 +124,18 @@ final class AudioTapEngine: @unchecked Sendable {
       stop()
       return nil
     }
+  }
 
-    guard let ioProc, AudioDeviceStart(aggregateID, ioProc) == noErr else {
-      stop()
-      return nil
+  /// Start only after the service accepts the build and installs its latest intent.
+  func start(gain: Float, equalizer: AppEqualizer) -> Bool {
+    guard !started, let processor, let ioProc else { return false }
+    let curve = equalizer.normalized
+    curve.gains.withUnsafeBufferPointer {
+      SBAudioEqualizerPrepare(processor, gain * channelCompensation, $0.baseAddress, curve.enabled)
     }
+    guard AudioDeviceStart(aggregateID, ioProc) == noErr else { return false }
+    started = true
+    return true
   }
 
   func stop() {
@@ -130,12 +147,14 @@ final class AudioTapEngine: @unchecked Sendable {
     ioProc = nil
 
     if let proc, aggregate != kAudioObjectUnknown {
-      AudioDeviceStop(aggregate, proc)
+      if started { AudioDeviceStop(aggregate, proc) }
       AudioDeviceDestroyIOProcID(aggregate, proc)
     }
     if aggregate != kAudioObjectUnknown {
       AudioHardwareDestroyAggregateDevice(aggregate)
     }
+    started = false
+    if let processor { SBAudioEqualizerDestroy(processor); self.processor = nil }
     if tap != kAudioObjectUnknown {
       _ = SBAudioDestroyProcessTap(tap)
     }
@@ -162,14 +181,13 @@ final class AudioTapEngine: @unchecked Sendable {
       mNumberBuffers: 1,
       mBuffers: AudioBuffer(
         mNumberChannels: 2, mDataByteSize: UInt32(count * 4), mData: destination))
-    let state = RenderState(initialGain: 2)
+    guard let processor = SBAudioEqualizerCreate(48_000, 2, nil, false) else { return false }
+    defer { SBAudioEqualizerDestroy(processor) }
     return withUnsafeMutablePointer(to: &input) { inputPointer in
       withUnsafeMutablePointer(to: &output) { outputPointer in
         func run(_ gain: Float) {
-          render(
-            inputs: UnsafeMutableAudioBufferListPointer(inputPointer),
-            outputs: UnsafeMutableAudioBufferListPointer(outputPointer),
-            tapChannels: 2, targetGain: gain, sampleRate: 48_000, state: state)
+          SBAudioEqualizerPublish(processor, gain, nil, false)
+          SBAudioEqualizerRender(processor, inputPointer, outputPointer, 2)
         }
         run(2)
         for frame in 0..<(count / 2) {
@@ -178,95 +196,47 @@ final class AudioTapEngine: @unchecked Sendable {
             left == destination[frame * 2 + 1]
           else { return false }
         }
-        run(0)
-        run(0)
+        for _ in 0..<32 { run(0) }
         guard (0..<count).allSatisfy({ destination[$0] == 0 }) else { return false }
-        let unity = RenderState(initialGain: 1)
-        render(
-          inputs: UnsafeMutableAudioBufferListPointer(inputPointer),
-          outputs: UnsafeMutableAudioBufferListPointer(outputPointer),
-          tapChannels: 2, targetGain: 1, sampleRate: 48_000, state: unity)
-        return (0..<count).allSatisfy { destination[$0] == source[$0] }
+        guard let unity = SBAudioEqualizerCreate(48_000, 1, nil, false) else { return false }
+        defer { SBAudioEqualizerDestroy(unity) }
+        SBAudioEqualizerRender(unity, inputPointer, outputPointer, 2)
+        guard (0..<count).allSatisfy({ destination[$0] == source[$0] }) else { return false }
+        let bands: [Float] = [3, 2, 0, -1, -2]
+        var response = [Float](repeating: 0, count: 129)
+        let headroom = bands.withUnsafeBufferPointer { bands in
+          response.withUnsafeMutableBufferPointer {
+            SBAudioEqualizerCurve(48_000, bands.baseAddress!, $0.baseAddress!, 129)
+          }
+        }
+        let equalizer = bands.withUnsafeBufferPointer {
+          SBAudioEqualizerCreate(48_000, 1, $0.baseAddress, true)
+        }
+        guard let equalizer else { return false }
+        defer { SBAudioEqualizerDestroy(equalizer) }
+        let frequency = 20 * pow(1_000.0, 0.5)
+        var inputEnergy = 0.0
+        var outputEnergy = 0.0
+        for block in 0..<400 {
+          for frame in 0..<(count / 2) {
+            source[frame * 2] = Float(0.1 * sin(2 * .pi * frequency * Double(block * count / 2 + frame) / 48_000))
+            source[frame * 2 + 1] = 0
+          }
+          SBAudioEqualizerRender(equalizer, inputPointer, outputPointer, 2)
+          for frame in 0..<(count / 2) {
+            let sample = destination[frame * 2]
+            guard sample.isFinite, abs(sample) <= 0.98001,
+              destination[frame * 2 + 1] == 0 else { return false }
+            if block > 100 {
+              inputEnergy += Double(source[frame * 2]) * Double(source[frame * 2])
+              outputEnergy += Double(sample) * Double(sample)
+            }
+          }
+        }
+        let measured = 10 * log10(outputEnergy / inputEnergy)
+        return abs(measured - Double(response[64] + headroom)) < 0.05
       }
     }
-  }
-
-  private static func render(
-    inputs: UnsafeMutableAudioBufferListPointer,
-    outputs: UnsafeMutableAudioBufferListPointer,
-    tapChannels: Int,
-    targetGain: Float,
-    sampleRate: Double,
-    state: RenderState
-  ) {
-    for output in outputs where output.mData != nil {
-      memset(output.mData, 0, Int(output.mDataByteSize))
-    }
-    guard
-      let source = inputs.reversed().first(where: {
-        Int($0.mNumberChannels) == tapChannels && $0.mData != nil
-      }), let sourceData = source.mData?.assumingMemoryBound(to: Float.self)
-    else { return }
-
-    let sourceFrames = Int(source.mDataByteSize) / (MemoryLayout<Float>.size * tapChannels)
-    guard sourceFrames > 0 else { return }
-    let requested = targetGain.isFinite ? min(max(targetGain, 0), 8) : 1
-    var peak: Float = 0
-    vDSP_maxmgv(sourceData, 1, &peak, vDSP_Length(sourceFrames * tapChannels))
-    guard peak.isFinite else { return }
-    // A linked block-peak guard preserves stereo balance. Attenuation is
-    // immediate; recovery takes 120 ms and never increases a quiet block
-    // past the user's requested gain. No lookahead buffer is allocated.
-    let demand = peak > 0 ? min(1, 0.98 / (peak * max(requested, state.appliedGain, 0.0001))) : 1
-    let release = Float(exp(-Double(sourceFrames) / (max(sampleRate, 1) * 0.12)))
-    let reduction =
-      demand < state.reduction ? demand : demand + release * (state.reduction - demand)
-    state.reduction = reduction
-    let safeTarget = requested * reduction
-    let startGain = min(
-      state.appliedGain.isFinite ? state.appliedGain : safeTarget,
-      peak > 0 ? 0.98 / peak : safeTarget)
-    let step = (safeTarget - startGain) / Float(sourceFrames)
-    var low: Float = -1
-    var high: Float = 1
-    var firstOutputChannel = 0
-
-    for output in outputs {
-      let outputChannels = Int(output.mNumberChannels)
-      defer { firstOutputChannel += outputChannels }
-      guard outputChannels > 0,
-        let destination = output.mData?.assumingMemoryBound(to: Float.self)
-      else { continue }
-      let frames = min(
-        sourceFrames,
-        Int(output.mDataByteSize) / (MemoryLayout<Float>.size * outputChannels)
-      )
-      for channel in 0..<outputChannels {
-        let sourceChannel = tapChannels == 1 ? 0 : firstOutputChannel + channel
-        guard sourceChannel < tapChannels else { continue }
-        var channelStart = startGain
-        var channelStep = step
-        vDSP_vrampmul(
-          sourceData + sourceChannel,
-          vDSP_Stride(tapChannels),
-          &channelStart,
-          &channelStep,
-          destination + channel,
-          vDSP_Stride(outputChannels),
-          vDSP_Length(frames)
-        )
-        vDSP_vclip(
-          destination + channel,
-          vDSP_Stride(outputChannels),
-          &low,
-          &high,
-          destination + channel,
-          vDSP_Stride(outputChannels),
-          vDSP_Length(frames)
-        )
-      }
-    }
-    state.appliedGain = safeTarget
   }
 
   private static func stereoMixdownCompensation(for device: AudioObjectID) -> Float {
@@ -326,32 +296,7 @@ final class AudioTapEngine: @unchecked Sendable {
   }
 }
 
-private final class RenderState: @unchecked Sendable {
-  var appliedGain: Float
-  var reduction: Float = 1
-
-  init(initialGain: Float) {
-    appliedGain = initialGain
-  }
-}
-
-private final class AtomicFloat: @unchecked Sendable {
-  private var bits: Int32
-
-  init(_ value: Float) {
-    bits = Int32(bitPattern: value.bitPattern)
-  }
-
-  var value: Float {
-    get {
-      Float(bitPattern: UInt32(bitPattern: OSAtomicAdd32Barrier(0, &bits)))
-    }
-    set {
-      let next = Int32(bitPattern: newValue.bitPattern)
-      while true {
-        let current = OSAtomicAdd32Barrier(0, &bits)
-        if OSAtomicCompareAndSwap32Barrier(current, next, &bits) { return }
-      }
-    }
-  }
+/// Lifetime belongs to AudioTapEngine; HAL is stopped before the C state is freed.
+private struct AudioRenderHandle: @unchecked Sendable {
+  let processor: OpaquePointer
 }

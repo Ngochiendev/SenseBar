@@ -24,9 +24,9 @@ struct AudioTapBuilds {
         pending.removeAll()
     }
 
-    static func needsEngine(volume: Double, playing: Bool, hasEngine: Bool) -> Bool {
+    static func needsEngine(volume: Double, playing: Bool, hasEngine: Bool, equalizer: Bool = false) -> Bool {
         // Retain adjusted/muted taps even during pause: dropping them would let
         // the first resumed frames escape at the app's original volume.
-        abs(volume - 1) >= 0.005 || (hasEngine && playing)
+        equalizer || abs(volume - 1) >= 0.005 || (hasEngine && playing)
     }
 }

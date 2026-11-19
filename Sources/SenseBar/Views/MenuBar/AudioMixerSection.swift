@@ -150,6 +150,11 @@ struct AudioMixerSection: View {
           .font(.system(size: 9.5).monospacedDigit())
           .foregroundStyle(.tertiary)
       }
+      if audio.audioSettingsSaveFailed {
+        Label(l10n.string(vi: "Chưa lưu được cài đặt âm thanh.", en: "Couldn't save audio settings."),
+              systemImage: "exclamationmark.circle")
+          .font(.system(size: 10.5)).foregroundStyle(.orange)
+      }
       if !audio.isPerAppMixerSupported {
         mixerNotice(
           l10n.string(
@@ -356,6 +361,7 @@ private struct AudioStudioAppRow: View {
   @ObservedObject private var l10n = L10n.shared
   @State private var editing = false
   @State private var percent = ""
+  @State private var showEqualizer = false
   @FocusState private var focused: Bool
 
   var body: some View {
@@ -371,7 +377,23 @@ private struct AudioStudioAppRow: View {
               .accessibilityLabel(l10n.string(vi: "Đang phát", en: "Playing"))
           }
           Spacer(minLength: 2)
-          if app.allowsVolumeControl { percentageControl }
+          if app.allowsVolumeControl {
+            if audio.appProcessing[app.id] == "failed" {
+              Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 10)).foregroundStyle(.orange)
+                .help(l10n.string(vi: "Chưa áp dụng được âm thanh cho ứng dụng", en: "App audio changes couldn't apply"))
+            }
+            Button { showEqualizer = true } label: {
+              Text("EQ").font(.system(size: 8.5, weight: .bold))
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(audio.equalizer(for: app.id).isEffective ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.1), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(audio.equalizer(for: app.id).isEffective ? Color.accentColor : .secondary)
+            .help(l10n.string(vi: "Chỉnh EQ cho ứng dụng", en: "Adjust app EQ"))
+            .popover(isPresented: $showEqualizer) { AudioEqualizerEditor(app: app, audio: audio) }
+            percentageControl
+          }
         }
         if app.allowsVolumeControl {
           HStack(spacing: 6) {
@@ -412,8 +434,9 @@ private struct AudioStudioAppRow: View {
       }
     }
     .padding(.vertical, 6)
+    .onChange(of: showEqualizer) { _, open in onEditing(open || editing) }
     .onDisappear {
-      if editing { onEditing(false) }
+      if editing || showEqualizer { onEditing(false) }
     }
   }
 

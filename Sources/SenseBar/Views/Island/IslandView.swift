@@ -61,6 +61,7 @@ struct IslandView: View {
     @ObservedObject var l10n = L10n.shared
     @ObservedObject private var notices = DeviceNoticeService.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var queuePresented = false
 
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
     @AppStorage(DefaultsKey.notchShowVisualizer) private var showVisualizer: Bool = true
@@ -114,6 +115,18 @@ struct IslandView: View {
                 .animation(.spring(response: 0.32, dampingFraction: 0.84), value: isPill)
         }
         .frame(width: IslandController.canvasWidth, height: IslandController.canvasHeight, alignment: .top)
+        .onChange(of: isViewExpanded) { _, expanded in
+            if expanded {
+                YouTubeQueueService.shared.preload(track: music.track)
+            } else {
+                queuePresented = false
+            }
+        }
+        .onChange(of: music.track) { _, next in
+            if isViewExpanded {
+                YouTubeQueueService.shared.preload(track: next)
+            }
+        }
     }
 
     @ViewBuilder
@@ -557,6 +570,7 @@ struct IslandView: View {
                     )
                 }
 
+
                 // Bộ chọn nguồn phát (Auto / Ghim ứng dụng)
                 Menu {
                     Button {
@@ -715,8 +729,9 @@ struct IslandView: View {
                 .padding(.horizontal, 22)
 
                 // Phím điều khiển phát nhạc và âm lượng
+                let showsYouTubeQueue = YouTubeQueueService.isCandidateSource(track)
                 ZStack {
-                    HStack {
+                    HStack(spacing: 4) {
                         Button {
                             music.openPlayerApp()
                         } label: {
@@ -724,22 +739,34 @@ struct IslandView: View {
                                 Image(systemName: music.controlError == nil ? "arrow.up.forward.app.fill" : "exclamationmark.triangle.fill")
                                     .font(.system(size: 10.5))
                                 Text(
-                                    track.supportsTransportControls
-                                        ? l10n.string(vi: "Mở App", en: "Open App")
-                                        : l10n.string(vi: "Mở để phát", en: "Open to play")
+                                    showsYouTubeQueue
+                                        ? l10n.string(vi: "Mở App", en: "Open")
+                                        : (track.supportsTransportControls
+                                            ? l10n.string(vi: "Mở App", en: "Open App")
+                                            : l10n.string(vi: "Mở để phát", en: "Open to play"))
                                 )
                                 .font(.system(size: 10.5, weight: .semibold))
+                                .lineLimit(1)
                             }
                             .foregroundStyle(.white.opacity(0.75))
-                            .padding(.horizontal, 9)
+                            .padding(.horizontal, showsYouTubeQueue ? 8 : 9)
                             .padding(.vertical, 5)
                             .background(Capsule().fill(Color.white.opacity(0.10)))
                         }
                         .buttonStyle(.plain)
                         .help(music.controlError ?? l10n.string(vi: "Mở ứng dụng đã chọn", en: "Open the selected app"))
 
+                        if showsYouTubeQueue {
+                            IslandQueueControls(music: music, presented: $queuePresented)
+                        }
+
                         Spacer()
-                        IslandAudioControls(audio: audio)
+                        IslandAudioControls(
+                            audio: audio,
+                            preferredAppID: music.track?.bundleID
+                                ?? (music.preferredSource == "auto" ? nil : music.preferredSource),
+                            queuePresented: $queuePresented
+                        )
                     }
                     HStack(spacing: 18) {
                         Button {
@@ -837,7 +864,8 @@ struct IslandView: View {
             if music.track == nil {
                 HStack {
                     Spacer()
-                    IslandAudioControls(audio: audio)
+                    IslandAudioControls(audio: audio, preferredAppID: music.track?.bundleID
+                            ?? (music.preferredSource == "auto" ? nil : music.preferredSource))
                 }
                 .padding(.horizontal, 22)
                 .padding(.bottom, 12)

@@ -10,6 +10,7 @@ final class MediaSessionCoordinator {
     private(set) var preferredBundleID: String = "auto"
     var isAutomatic: Bool { preferredBundleID == "auto" }
     private(set) var availableSources: [[String: Any]] = []
+    private(set) var closedBrowserBundles: Set<String> = []
 
     func setPreferredSource(_ bundleID: String) {
         let normalized = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -19,6 +20,7 @@ final class MediaSessionCoordinator {
     }
 
     func choose() -> MediaRemoteEndpoint? {
+        closedBrowserBundles = BrowserWindowSnapshot.closedBundles()
         let directory = MediaRemoteIO.discover()
         var seen = Set<Int32>()
         let preferred = [directory.current, ledger.owner?.pid].compactMap { $0 }
@@ -26,7 +28,8 @@ final class MediaSessionCoordinator {
         let endpoints: [MediaRemoteEndpoint] = candidates.prefix(16).compactMap { pid in
             let client = directory.clients.first { $0.pid == pid }
             guard var endpoint = MediaRemoteEndpoint(pid: pid, parentBundle: client?.parentBundle,
-                                                    registeredBundle: client?.bundle) else { return nil }
+                                                    registeredBundle: client?.bundle), endpoint.alive,
+                  !closedBrowserBundles.contains(endpoint.presentationBundle) else { return nil }
             endpoint.ownsSystemSession = pid == directory.current
             return endpoint
         }

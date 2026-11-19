@@ -6,15 +6,19 @@ releases:
   - version: "1.3.6"
     changes:
       - type: feature
-        text: "Thêm bảng âm thanh gọn trên Island để chỉnh âm lượng, tắt tiếng và chọn thiết bị đầu ra, với biểu tượng riêng cho từng loại thiết bị."
+        text: "Xem danh sách chờ YouTube và YouTube Music trên Island."
+      - type: feature
+        text: "Thêm EQ 5 dải cho từng ứng dụng, có preset và tự lưu cài đặt."
+      - type: feature
+        text: "Tăng giảm âm lượng, tắt tiếng và chọn thiết bị đầu ra ngay trên Island."
       - type: fix
-        text: "Hiển thị tùy chọn thông báo phụ kiện khi chỉ dùng màn hình MacBook và cải thiện việc ghi nhớ các đợt pin yếu."
+        text: "Bỏ phiên nhạc cũ khi đóng trình duyệt và tự chọn nguồn còn phát."
       - type: improvement
-        text: "Cho phép chọn ngưỡng cảnh báo pin phụ kiện, nhắc một lần mỗi đợt pin yếu và cho phép nhắc lại sau khi pin hồi phục."
+        text: "Chọn ngưỡng pin phụ kiện, nhắc mỗi đợt pin yếu và bỏ qua phần pin đang sạc."
       - type: improvement
-        text: "Bỏ qua cảnh báo cho phần pin phụ kiện được xác nhận đang sạc."
+        text: "Thông báo phụ kiện gọn hơn, cân đối trên MacBook và màn hình rời."
       - type: improvement
-        text: "Tinh chỉnh thông báo phụ kiện trên tai thỏ và capsule, hiển thị pin rõ hơn và cân đối hơn trên màn hình rời."
+        text: "Cải thiện độ mượt khi chỉnh âm lượng và màu hiển thị EQ."
 
   - version: "1.3.5"
     changes:

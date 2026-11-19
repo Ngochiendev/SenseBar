@@ -3,6 +3,9 @@ import SwiftUI
 /// Compact trigger with an on-demand volume and output panel.
 struct IslandAudioControls: View {
     @ObservedObject var audio: AudioStudioService
+    var preferredAppID: String? = nil
+    var queuePresented: Binding<Bool> = .constant(false)
+    @State private var equalizerPresented = false
     @ObservedObject private var l10n = L10n.shared
     @AppStorage(DefaultsKey.pillarAudioStudioEnabled) private var enabled = true
     @State private var presented = false
@@ -14,7 +17,32 @@ struct IslandAudioControls: View {
     private var percent: Int { Int((audio.isMasterMuted ? 0 : audio.masterVolume) * 100) }
 
     var body: some View {
-        Button { presented.toggle() } label: {
+        HStack(spacing: 4) {
+            IslandEqualizerControls(audio: audio, preferredAppID: preferredAppID, presented: $equalizerPresented)
+            volumeTrigger
+        }
+        .onChange(of: equalizerPresented) { _, open in
+            if open {
+                presented = false
+                queuePresented.wrappedValue = false
+            }
+        }
+        .onChange(of: presented) { _, open in
+            if open {
+                equalizerPresented = false
+                queuePresented.wrappedValue = false
+            }
+        }
+        .onChange(of: queuePresented.wrappedValue) { _, open in
+            if open {
+                presented = false
+                equalizerPresented = false
+            }
+        }
+    }
+
+    private var volumeTrigger: some View {
+        Button { equalizerPresented = false; presented.toggle() } label: {
             HStack(spacing: 4) {
                 Image(systemName: audio.isMasterMuted ? "speaker.slash.fill" : audio.selectedOutputSymbol)
                     .foregroundStyle(audio.isMasterMuted ? .orange : .white.opacity(0.7))
@@ -40,7 +68,7 @@ struct IslandAudioControls: View {
         .onChange(of: presented) { _, value in
             if value { holdIsland() } else { releaseIsland() }
         }
-        .onChange(of: enabled) { _, value in if !value { presented = false } }
+        .onChange(of: enabled) { _, value in if !value { presented = false; equalizerPresented = false } }
         .onDisappear { presented = false; releaseIsland() }
     }
 

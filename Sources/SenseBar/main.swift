@@ -15,6 +15,8 @@ MainActor.assumeIsolated {
                      "Mozilla session must decode the size-prefixed raw LZ4 block")
         precondition(BrowserArtworkService.decodeSession(sessionBlock.dropLast()) == nil,
                      "Truncated sessions must not produce partial metadata")
+        precondition(YouTubeQueueParser.validateSelfTests(),
+                     "YouTube/YouTube Music queue URL, InnerTube, AX, Pear, and Kaset parsers must pass")
         precondition(MusicService.validatePlaybackParser(), "MusicService parser must cleanly parse playback sessions")
         let menuIcon = BrandIconResources.menuBarTemplateImage()
         assert(menuIcon.isTemplate, "MenuBarIcon must be a template image")
@@ -49,6 +51,13 @@ MainActor.assumeIsolated {
         precondition(updatePreview.1.stage == .notDownloaded && updatePreview.1.userInitiated,
                      "Preview must show the pre-download update prompt")
 #endif
+        precondition(AudioEqualizerTarget.resolve(preferredID: "com.google.Chrome", eligibleIDs: ["com.spotify.client"], playingIDs: ["com.spotify.client"]) == nil,
+                     "A missing explicit source must never target a different app's EQ")
+        precondition(AudioEqualizerTarget.resolve(preferredID: "COM.GOOGLE.CHROME", eligibleIDs: ["com.google.Chrome"], playingIDs: []) == "com.google.Chrome")
+        precondition(AudioEqualizerTarget.resolve(preferredID: nil, eligibleIDs: ["a", "b"], playingIDs: ["a", "b"]) == nil,
+                     "Ambiguous playback requires an explicit app choice")
+        precondition(AudioMixDocument.validatePersistence(), "Mix persistence: migration, normalization or recovery failed")
+        precondition(AudioTapBuilds.needsEngine(volume: 1, playing: true, hasEngine: false, equalizer: true), "EQ must run at unity volume")
         precondition(AudioTapEngine.validateRender(), "Audio render: boost ceiling, stereo, mute or unity failed")
         let batteryFixture = Data(#"{"SPBluetoothDataType":[{"device_connected":[{"My AirPods":{"device_address":"AA-BB-CC-DD-EE-FF","device_batteryLevelLeft":"73%","device_batteryLevelRight":64,"device_batteryLevelCase":"101%"}},{"Other mouse":{"device_address":"11-22-33-44-55-66","device_batteryLevelMain":"40%"}}]}]}"#.utf8)
         let battery = DeviceConnectionMonitor.battery(in: batteryFixture, address: "aa:bb:cc:dd:ee:ff")
