@@ -49,7 +49,7 @@ final class IslandController: ObservableObject {
     static let shared = IslandController()
 
     static let canvasWidth: CGFloat = 430
-    static let canvasHeight: CGFloat = 210
+    static let canvasHeight: CGFloat = 280
 
     @Published private(set) var isExpanded: Bool = false
     @Published private(set) var cameraCutoutWidth: CGFloat = 184
@@ -63,6 +63,11 @@ final class IslandController: ObservableObject {
     private var mainPanel: IslandPanel?
     private var mirrorPanels: [CGDirectDisplayID: IslandPanel] = [:]
 
+    var hasVisibleNoticeSurface: Bool {
+        if let mainPanel, mainPanel.wantsVisible, mainPanel.isVisible { return true }
+        return mirrorPanels.values.contains { $0.wantsVisible && $0.isVisible }
+    }
+
     private var mouseMonitor: Any?
     private var localMouseMonitor: Any?
     private var screenObserver: NSObjectProtocol?
@@ -73,10 +78,43 @@ final class IslandController: ObservableObject {
     private var hoverWorkItem: DispatchWorkItem?
     private var collapseWorkItem: DispatchWorkItem?
     private var isPinnedOpen = false
+    private var menuTrackingDepth = 0
+    private var audioPopoverCount = 0
+
+    func beginAudioPopover() {
+        audioPopoverCount += 1
+        collapseWorkItem?.cancel()
+        collapseWorkItem = nil
+    }
+
+    func endAudioPopover() {
+        audioPopoverCount = max(0, audioPopoverCount - 1)
+        if audioPopoverCount == 0 { handleMouseEvent(type: .mouseMoved) }
+    }
+    private var menuObservers: [NSObjectProtocol] = []
 
     private init() {
         registerDefaultPreferences()
         refreshStyleAvailability()
+        menuObservers.append(NotificationCenter.default.addObserver(
+            forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isExpanded else { return }
+                self.menuTrackingDepth += 1
+                self.collapseWorkItem?.cancel()
+                self.collapseWorkItem = nil
+            }
+        })
+        menuObservers.append(NotificationCenter.default.addObserver(
+            forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.menuTrackingDepth = max(0, self.menuTrackingDepth - 1)
+                if self.menuTrackingDepth == 0 { self.handleMouseEvent(type: .mouseMoved) }
+            }
+        })
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
@@ -153,7 +191,9 @@ final class IslandController: ObservableObject {
     func islandSize(for screen: NSScreen? = nil, expanded: Bool? = nil) -> CGSize {
         let geo = geometry(for: screen)
         if expanded ?? isExpanded {
-            return geo.expandedSize
+            var size = geo.expandedSize
+            if MusicService.shared.track == nil { size.height = max(size.height, 216) }
+            return size
         }
         if DeviceNoticeService.shared.current != nil {
             return CGSize(width: geo.isNotched ? min(Self.canvasWidth, max(320, geo.cameraWidth + 150)) : 296,
@@ -635,6 +675,7 @@ final class IslandController: ObservableObject {
     }
 
     private func handleMouseEvent(type: NSEvent.EventType) {
+        guard menuTrackingDepth == 0, audioPopoverCount == 0 else { return }
         guard SensePillar.dynamicIsland.isEnabled(), let mainPanel, mainPanel.wantsVisible, mainPanel.isVisible else { return }
         let mouse = NSEvent.mouseLocation
         let currentScreen = mainPanel.screen ?? targetScreenForActivePanel

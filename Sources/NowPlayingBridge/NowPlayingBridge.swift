@@ -186,8 +186,10 @@ public func sensebarNowPlayingGet() {
     previousTitle = title
     previousArtist = artist
     let audioOutput = BrowserAudioSnapshot.read()
-    snapshot["runningOutputBrowsers"] = audioOutput.browsers
-    snapshot["runningOutputApplications"] = audioOutput.applications
+    let closedBrowsers = coordinator.closedBrowserBundles
+    snapshot["closedBrowserBundles"] = Array(closedBrowsers)
+    snapshot["runningOutputBrowsers"] = audioOutput.browsers.filter { !closedBrowsers.contains($0["bundleID"] as? String ?? "") }
+    snapshot["runningOutputApplications"] = audioOutput.applications.filter { !closedBrowsers.contains($0["bundleID"] as? String ?? "") }
     snapshot["availableSources"] = coordinator.availableSources
     snapshot["preferredSource"] = coordinator.preferredBundleID
 

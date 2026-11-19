@@ -87,9 +87,14 @@ final class MusicService: ObservableObject {
     private var controlGeneration = UUID()
     private var rawBuffer = Data()
     private var bridgeGeneration = UUID()
+    private var terminationObserver: NSObjectProtocol?
+    private let isApplicationRunning: (String) -> Bool
     private let workerQueue = DispatchQueue(label: "com.ngochiendev.sensebar.music-service", qos: .utility)
 
-    private init(autostart: Bool = true) {
+    private init(autostart: Bool = true, isApplicationRunning: @escaping (String) -> Bool = { bundle in
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundle).contains { !$0.isTerminated }
+    }) {
+        self.isApplicationRunning = isApplicationRunning
         preferredSource = UserDefaults.standard.string(forKey: "SenseBarMediaPreferredSource") ?? "auto"
         if autostart { start() }
     }
@@ -128,6 +133,18 @@ final class MusicService: ObservableObject {
 
     func start() {
         shouldRun = true
+        if terminationObserver == nil {
+            terminationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main
+            ) { [weak self] notification in
+                guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                      let bundle = app.bundleIdentifier else { return }
+                let pid = Int(app.processIdentifier)
+                Task { @MainActor [weak self] in
+                    self?.applicationTerminated(bundleID: bundle, pid: pid)
+                }
+            }
+        }
         guard process == nil, let dylib = Self.dylibPath else { return }
         let proc = Process()
         let outPipe = Pipe()
@@ -176,6 +193,10 @@ final class MusicService: ObservableObject {
     }
 
     func stop() {
+        if let terminationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(terminationObserver)
+            self.terminationObserver = nil
+        }
         resetSelectedPlayerControl()
         bridgeGeneration = UUID()
         rawBuffer.removeAll(keepingCapacity: false)
@@ -209,7 +230,7 @@ final class MusicService: ObservableObject {
     }
 
     static func validatePlaybackParser() -> Bool {
-        let service = MusicService(autostart: false)
+        let service = MusicService(autostart: false, isApplicationRunning: { _ in true })
         defer { service.stop() }
         func apply(title: String, artist: String, playing: Bool) {
             let fields: [String: Any] = ["title": title, "artist": artist, "duration": 180,
@@ -277,6 +298,27 @@ final class MusicService: ObservableObject {
         service.parseJSONLine(skipData)
         guard service.track?.supportsTransportControls == false, service.track?.supportsNext == true,
               service.track?.supportsPrevious == true, service.track?.supportsSeeking == true else { return false }
+        service.applicationTerminated(bundleID: "com.spotify.client", pid: 100)
+        guard service.track == nil, service.artwork == nil else { return false }
+        service.parseJSONLine(skipData)
+        guard service.track?.title == "Song A" else { return false }
+        let exitedBrowser = MusicService(autostart: false, isApplicationRunning: { _ in false })
+        exitedBrowser.preferredSource = "auto"
+        var staleBrowser = valid
+        staleBrowser["bundleID"] = "com.apple.Safari"
+        guard let staleBrowserData = try? JSONSerialization.data(withJSONObject: staleBrowser) else { return false }
+        exitedBrowser.parseJSONLine(staleBrowserData)
+        guard exitedBrowser.track == nil else { return false }
+        service.parseJSONLine(staleBrowserData)
+        guard service.track?.bundleID == "com.apple.Safari" else { return false }
+        staleBrowser["closedBrowserBundles"] = ["com.apple.Safari"]
+        guard let closedWindowData = try? JSONSerialization.data(withJSONObject: staleBrowser) else { return false }
+        service.parseJSONLine(closedWindowData)
+        guard service.track == nil, service.artwork == nil else { return false }
+        staleBrowser["bundleID"] = "com.google.Chrome"
+        guard let otherBrowserData = try? JSONSerialization.data(withJSONObject: staleBrowser) else { return false }
+        service.parseJSONLine(otherBrowserData)
+        guard service.track?.bundleID == "com.google.Chrome", service.track?.isPlaying == true else { return false }
         service.stop()
         return service.track == nil && service.artwork == nil
     }
@@ -284,6 +326,24 @@ final class MusicService: ObservableObject {
     func refreshNowPlaying() {
         guard let handle = inputPipe?.fileHandleForWriting else { return }
         workerQueue.async { try? handle.write(contentsOf: Data("refresh\n".utf8)) }
+    }
+
+    /// Bỏ phiên của ứng dụng đã thoát và trở về tự động nếu nguồn ghim không còn chạy.
+    private func applicationTerminated(bundleID: String, pid: Int) {
+        availableSources.removeAll { $0.bundleID.caseInsensitiveCompare(bundleID) == .orderedSame }
+        if preferredSource.caseInsensitiveCompare(bundleID) == .orderedSame {
+            selectSource("auto")
+            return
+        }
+        if track?.pid == pid || track?.bundleID.caseInsensitiveCompare(bundleID) == .orderedSame {
+            resetSelectedPlayerControl()
+            track = nil
+            artwork = nil
+            cachedRemoteArtwork = nil
+            cachedRemoteAccent = nil
+            browserArtwork.cancel()
+        }
+        refreshNowPlaying()
     }
 
     /// Chọn nguồn phát cụ thể (hoặc "auto" để tự động nhận diện)
@@ -489,6 +549,27 @@ final class MusicService: ObservableObject {
         let bundleID = (json["bundleID"] as? String) ?? ""
         let pid = (json["pid"] as? Int) ?? 0
         let appName = (json["appName"] as? String) ?? Self.friendlyAppName(for: bundleID)
+        let closedBrowsers = Set(json["closedBrowserBundles"] as? [String] ?? [])
+        if closedBrowsers.contains(preferredSource) {
+            selectSource("auto")
+            return
+        }
+        if closedBrowsers.contains(bundleID) {
+            resetSelectedPlayerControl()
+            track = nil
+            artwork = nil
+            cachedRemoteArtwork = nil
+            cachedRemoteAccent = nil
+            browserArtwork.cancel()
+            return
+        }
+        if YouTubeCandidateFamily.classify(bundleID: bundleID)?.isBrowser == true,
+           !isApplicationRunning(bundleID) {
+            if track?.bundleID == bundleID || preferredSource == bundleID {
+                applicationTerminated(bundleID: bundleID, pid: pid)
+            }
+            return
+        }
 
         let isBrowser = bundleID.lowercased().contains("chrome")
             || bundleID.lowercased().contains("brave")

@@ -41,7 +41,7 @@ struct AudioMixerSection: View {
   private var outputCard: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 8) {
-        Image(systemName: AudioOutputAppearance.symbol(for: audio.outputDeviceName))
+        Image(systemName: audio.selectedOutputSymbol)
           .font(.system(size: 16, weight: .semibold))
           .foregroundStyle(Color.accentColor)
           .frame(width: 32, height: 32)
@@ -149,6 +149,11 @@ struct AudioMixerSection: View {
         Text("0–200%")
           .font(.system(size: 9.5).monospacedDigit())
           .foregroundStyle(.tertiary)
+      }
+      if audio.audioSettingsSaveFailed {
+        Label(l10n.string(vi: "Chưa lưu được cài đặt âm thanh.", en: "Couldn't save audio settings."),
+              systemImage: "exclamationmark.circle")
+          .font(.system(size: 10.5)).foregroundStyle(.orange)
       }
       if !audio.isPerAppMixerSupported {
         mixerNotice(
@@ -300,7 +305,7 @@ private struct AudioOutputPicker: View {
         dismiss()
       } label: {
         HStack(spacing: 10) {
-          Image(systemName: AudioOutputAppearance.symbol(for: device.name))
+          Image(systemName: device.kind.symbol)
             .font(.system(size: 17)).frame(width: 26)
           VStack(alignment: .leading, spacing: 3) {
             Text(device.name).font(.system(size: 11.5, weight: selected ? .semibold : .regular))
@@ -349,17 +354,6 @@ private struct AudioOutputPicker: View {
   }
 }
 
-private enum AudioOutputAppearance {
-  static func symbol(for name: String) -> String {
-    let name = name.lowercased()
-    if name.contains("airpods") { return "airpodspro" }
-    if name.contains("headphone") || name.contains("tai nghe") { return "headphones" }
-    if name.contains("macbook") || name.contains("built-in") { return "laptopcomputer" }
-    if name.contains("teams") || name.contains("virtual") { return "waveform" }
-    return "speaker.wave.2.fill"
-  }
-}
-
 private struct AudioStudioAppRow: View {
   let app: AudioAppEntry
   @ObservedObject var audio: AudioStudioService
@@ -367,6 +361,7 @@ private struct AudioStudioAppRow: View {
   @ObservedObject private var l10n = L10n.shared
   @State private var editing = false
   @State private var percent = ""
+  @State private var showEqualizer = false
   @FocusState private var focused: Bool
 
   var body: some View {
@@ -382,7 +377,23 @@ private struct AudioStudioAppRow: View {
               .accessibilityLabel(l10n.string(vi: "Đang phát", en: "Playing"))
           }
           Spacer(minLength: 2)
-          if app.allowsVolumeControl { percentageControl }
+          if app.allowsVolumeControl {
+            if audio.appProcessing[app.id] == "failed" {
+              Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 10)).foregroundStyle(.orange)
+                .help(l10n.string(vi: "Chưa áp dụng được âm thanh cho ứng dụng", en: "App audio changes couldn't apply"))
+            }
+            Button { showEqualizer = true } label: {
+              Text("EQ").font(.system(size: 8.5, weight: .bold))
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(audio.equalizer(for: app.id).isEffective ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.1), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(audio.equalizer(for: app.id).isEffective ? Color.accentColor : .secondary)
+            .help(l10n.string(vi: "Chỉnh EQ cho ứng dụng", en: "Adjust app EQ"))
+            .popover(isPresented: $showEqualizer) { AudioEqualizerEditor(app: app, audio: audio) }
+            percentageControl
+          }
         }
         if app.allowsVolumeControl {
           HStack(spacing: 6) {
@@ -423,8 +434,9 @@ private struct AudioStudioAppRow: View {
       }
     }
     .padding(.vertical, 6)
+    .onChange(of: showEqualizer) { _, open in onEditing(open || editing) }
     .onDisappear {
-      if editing { onEditing(false) }
+      if editing || showEqualizer { onEditing(false) }
     }
   }
 

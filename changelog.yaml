@@ -3,6 +3,23 @@
 # version luôn là chuỗi "X.Y.Z"; date tùy chọn, dùng chuỗi "YYYY-MM-DD".
 releases:
   # Đang chuẩn bị, chưa phát hành.
+  - version: "1.3.6"
+    changes:
+      - type: feature
+        text: "Xem danh sách chờ YouTube và YouTube Music trên Island."
+      - type: feature
+        text: "Thêm EQ 5 dải cho từng ứng dụng, có preset và tự lưu cài đặt."
+      - type: feature
+        text: "Tăng giảm âm lượng, tắt tiếng và chọn thiết bị đầu ra ngay trên Island."
+      - type: fix
+        text: "Bỏ phiên nhạc cũ khi đóng trình duyệt và tự chọn nguồn còn phát."
+      - type: improvement
+        text: "Chọn ngưỡng pin phụ kiện, nhắc mỗi đợt pin yếu và bỏ qua phần pin đang sạc."
+      - type: improvement
+        text: "Thông báo phụ kiện gọn hơn, cân đối trên MacBook và màn hình rời."
+      - type: improvement
+        text: "Cải thiện độ mượt khi chỉnh âm lượng và màu hiển thị EQ."
+
   - version: "1.3.5"
     changes:
       - type: improvement

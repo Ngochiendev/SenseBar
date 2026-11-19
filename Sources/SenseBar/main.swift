@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CoreAudio
 import Sparkle
 
 MainActor.assumeIsolated {
@@ -14,6 +15,8 @@ MainActor.assumeIsolated {
                      "Mozilla session must decode the size-prefixed raw LZ4 block")
         precondition(BrowserArtworkService.decodeSession(sessionBlock.dropLast()) == nil,
                      "Truncated sessions must not produce partial metadata")
+        precondition(YouTubeQueueParser.validateSelfTests(),
+                     "YouTube/YouTube Music queue URL, InnerTube, AX, Pear, and Kaset parsers must pass")
         precondition(MusicService.validatePlaybackParser(), "MusicService parser must cleanly parse playback sessions")
         let menuIcon = BrandIconResources.menuBarTemplateImage()
         assert(menuIcon.isTemplate, "MenuBarIcon must be a template image")
@@ -48,6 +51,13 @@ MainActor.assumeIsolated {
         precondition(updatePreview.1.stage == .notDownloaded && updatePreview.1.userInitiated,
                      "Preview must show the pre-download update prompt")
 #endif
+        precondition(AudioEqualizerTarget.resolve(preferredID: "com.google.Chrome", eligibleIDs: ["com.spotify.client"], playingIDs: ["com.spotify.client"]) == nil,
+                     "A missing explicit source must never target a different app's EQ")
+        precondition(AudioEqualizerTarget.resolve(preferredID: "COM.GOOGLE.CHROME", eligibleIDs: ["com.google.Chrome"], playingIDs: []) == "com.google.Chrome")
+        precondition(AudioEqualizerTarget.resolve(preferredID: nil, eligibleIDs: ["a", "b"], playingIDs: ["a", "b"]) == nil,
+                     "Ambiguous playback requires an explicit app choice")
+        precondition(AudioMixDocument.validatePersistence(), "Mix persistence: migration, normalization or recovery failed")
+        precondition(AudioTapBuilds.needsEngine(volume: 1, playing: true, hasEngine: false, equalizer: true), "EQ must run at unity volume")
         precondition(AudioTapEngine.validateRender(), "Audio render: boost ceiling, stereo, mute or unity failed")
         let batteryFixture = Data(#"{"SPBluetoothDataType":[{"device_connected":[{"My AirPods":{"device_address":"AA-BB-CC-DD-EE-FF","device_batteryLevelLeft":"73%","device_batteryLevelRight":64,"device_batteryLevelCase":"101%"}},{"Other mouse":{"device_address":"11-22-33-44-55-66","device_batteryLevelMain":"40%"}}]}]}"#.utf8)
         let battery = DeviceConnectionMonitor.battery(in: batteryFixture, address: "aa:bb:cc:dd:ee:ff")
@@ -58,18 +68,97 @@ MainActor.assumeIsolated {
         precondition(DeviceConnectionMonitor.battery(in: Data(), address: "aa:bb:cc:dd:ee:ff") == nil,
                      "Missing telemetry must remain unknown")
         var lowBattery = PeripheralLowBatteryPolicy()
-        precondition(lowBattery.consume(id: "mouse", reading: DeviceBatteryReading(percent: 45)) == nil)
-        precondition(lowBattery.consume(id: "mouse", reading: DeviceBatteryReading(percent: 20)) == 20)
-        precondition(lowBattery.consume(id: "mouse", reading: DeviceBatteryReading(percent: 19)) == nil,
-                     "A low battery must not repeat on every sample or reconnect")
-        precondition(lowBattery.consume(id: "mouse", reading: DeviceBatteryReading()) == nil)
-        precondition(lowBattery.consume(id: "mouse", reading: DeviceBatteryReading(percent: 10)) == 10)
-        precondition(lowBattery.consume(id: "mouse", reading: DeviceBatteryReading(percent: 22)) == nil)
-        precondition(lowBattery.consume(id: "mouse", reading: DeviceBatteryReading(percent: 19)) == nil,
-                     "Readings near the threshold must not re-arm a low episode")
-        precondition(lowBattery.consume(id: "mouse", reading: DeviceBatteryReading(percent: 25)) == nil)
-        precondition(lowBattery.consume(id: "mouse", reading: DeviceBatteryReading(percent: 20)) == 20)
-        precondition(lowBattery.consume(id: "airpods", reading: DeviceBatteryReading(left: 75, right: 8)) == 8)
+        precondition(lowBattery.candidate(reading: DeviceBatteryReading(percent: 20), threshold: 20) == .main)
+        precondition(lowBattery.candidate(reading: DeviceBatteryReading(percent: 21), threshold: 20) == nil)
+        precondition(lowBattery.candidate(reading: DeviceBatteryReading(percent: 0), threshold: 20) == .main)
+        precondition(lowBattery.candidate(reading: DeviceBatteryReading(percent: 8, charging: true), threshold: 20) == nil)
+        precondition(lowBattery.candidate(reading: DeviceBatteryReading(left: 8, right: 90, casePercent: 5,
+            leftCharging: true, caseCharging: false), threshold: 20) == .batteryCase,
+            "A charging earbud must not suppress an empty case")
+        precondition(lowBattery.candidate(reading: DeviceBatteryReading(percent: 5, left: 75, right: 80,
+            charging: false), threshold: 20) == nil, "Aggregate levels must not override known component levels")
+        let noticeTime = Date(timeIntervalSince1970: 1_700_000_000)
+        precondition(lowBattery.canPresent(id: "mouse"))
+        precondition(lowBattery.canPresent(id: "mouse"), "Queued notices must not consume the episode")
+        lowBattery.recordPresentation(id: "mouse", reading: .init(percent: 20), now: noticeTime)
+        var restoredBatteryPolicy = PeripheralLowBatteryPolicy(lastPresented: lowBattery.lastPresented,
+            recoveryComponents: lowBattery.recoveryComponents)
+        precondition(!restoredBatteryPolicy.canPresent(id: "mouse"), "Restart must preserve a low episode")
+        precondition(restoredBatteryPolicy.canPresent(id: "keyboard"), "Episodes are per device")
+        let savedBatteryHistory = try! PropertyListSerialization.data(fromPropertyList: lowBattery.lastPresented,
+            format: .binary, options: 0)
+        let restoredHistory = try! PropertyListSerialization.propertyList(from: savedBatteryHistory,
+            options: [], format: nil) as! [String: Date]
+        precondition(!PeripheralLowBatteryPolicy(lastPresented: restoredHistory).canPresent(id: "mouse"),
+                     "The presentation history must survive property-list persistence")
+        for reading in [DeviceBatteryReading(), .init(percent: 20), .init(percent: 19),
+                        .init(percent: 20, charging: true), .init(percent: 29)] {
+            precondition(!restoredBatteryPolicy.observeRecovery(id: "mouse", reading: reading, threshold: 20))
+            precondition(!restoredBatteryPolicy.canPresent(id: "mouse"),
+                         "Missing data, brief charging or near-threshold jitter must not re-arm an episode")
+        }
+        precondition(restoredBatteryPolicy.observeRecovery(id: "mouse", reading: .init(percent: 30), threshold: 20))
+        precondition(restoredBatteryPolicy.canPresent(id: "mouse"), "Recovery must re-arm without waiting 24 hours")
+        precondition(restoredBatteryPolicy.candidate(reading: .init(percent: 20), threshold: 20) == .main)
+        restoredBatteryPolicy.recordPresentation(id: "airpods", reading: .init(left: 8, casePercent: 5))
+        precondition(!restoredBatteryPolicy.observeRecovery(id: "airpods", reading: .init(left: 80), threshold: 20),
+                     "An absent case reading cannot prove case recovery")
+        precondition(!restoredBatteryPolicy.observeRecovery(id: "airpods", reading: .init(left: 80, casePercent: 5), threshold: 20))
+        precondition(restoredBatteryPolicy.observeRecovery(id: "airpods", reading: .init(left: 80, casePercent: 30), threshold: 20))
+        var earbudEpisode = PeripheralLowBatteryPolicy()
+        earbudEpisode.recordPresentation(id: "buds", reading: .init(left: 10, right: 80, casePercent: 25))
+        precondition(earbudEpisode.observeRecovery(id: "buds", reading: .init(left: 30, right: 80, casePercent: 25), threshold: 20),
+                     "A healthy sibling battery must not prevent a low earbud's recovery")
+        earbudEpisode.recordPresentation(id: "buds", reading: .init(left: 10, right: 80), threshold: 15)
+        let episodeData = try! PropertyListEncoder().encode(earbudEpisode.persistentHistory)
+        var decodedEpisode = try! PropertyListDecoder().decode(PeripheralLowBatteryPolicy.self, from: episodeData)
+        precondition(!decodedEpisode.canPresent(id: "buds"))
+        precondition(!decodedEpisode.observeRecovery(id: "buds", reading: .init(left: 24), threshold: 15))
+        precondition(decodedEpisode.observeRecovery(id: "buds", reading: .init(left: 25), threshold: 15))
+        precondition(AudioOutputKind.classify(name: "Renamed monitor", transport: kAudioDeviceTransportTypeHDMI,
+            terminal: 0) == .display)
+        precondition(AudioOutputKind.classify(name: "Renamed headset", transport: kAudioDeviceTransportTypeBuiltIn,
+            terminal: kAudioStreamTerminalTypeHeadphones) == .headphones)
+        precondition(AudioOutputKind.classify(name: "Interface", transport: kAudioDeviceTransportTypeUSB,
+            terminal: 0) == .usb)
+        precondition(AudioOutputKind.classify(name: "AirPods Pro", transport: kAudioDeviceTransportTypeVirtual,
+            terminal: 0) == .virtual, "Native transport must beat a misleading display name")
+        precondition(AudioOutputKind.classify(name: "AirPods Max", transport: kAudioDeviceTransportTypeBluetooth,
+            terminal: 0) == .airPodsMax)
+        precondition(Set(AudioOutputKind.allCases.map(\.symbol)).count == AudioOutputKind.allCases.count,
+                     "Each output category must have its own icon")
+        for kind in AudioOutputKind.allCases {
+            precondition(NSImage(systemSymbolName: kind.symbol, accessibilityDescription: nil) != nil,
+                         "Output symbols must exist on this macOS version")
+        }
+        let accessoryFixture: [[String: Any]] = [
+            ["Type": "Accessory Source", "Group Identifier": "AA:BB:CC:DD:EE:FF", "Part Identifier": "Left",
+             "Current Capacity": 8, "Max Capacity": 100, "Is Charging": true],
+            ["Type": "Accessory Source", "Group Identifier": "AA:BB:CC:DD:EE:FF", "Part Identifier": "Case",
+             "Current Capacity": 0, "Max Capacity": 100, "Is Charging": false]
+        ]
+        let accessoryBattery = AccessoryPowerSourceReader.battery(in: accessoryFixture, address: "aa-bb-cc-dd-ee-ff")
+        precondition(accessoryBattery?.left == 8 && accessoryBattery?.leftCharging == true
+            && accessoryBattery?.casePercent == 0 && accessoryBattery?.caseCharging == false)
+        precondition(AccessoryPowerSourceReader.battery(in: accessoryFixture, address: "11-22-33-44-55-66") == nil)
+        precondition(AccessoryPowerSourceReader.battery(in: [accessoryFixture[0], accessoryFixture[0]],
+            address: "aa-bb-cc-dd-ee-ff") == nil, "Ambiguous parts must remain unknown")
+        var missingIdentity = accessoryFixture[0]
+        missingIdentity.removeValue(forKey: "Group Identifier")
+        missingIdentity["Name"] = "AA:BB:CC:DD:EE:FF"
+        precondition(AccessoryPowerSourceReader.battery(in: [missingIdentity], address: "aa-bb-cc-dd-ee-ff") == nil,
+                     "Display names must never act as Bluetooth identities")
+        let fixtureUUID = "8E9C0308-B63A-4212-BA4A-F053C46017DC"
+        var uuidSource = accessoryFixture[0]
+        uuidSource["Group Identifier"] = fixtureUUID
+        precondition(AccessoryPowerSourceReader.battery(in: [uuidSource], address: "aa-bb-cc-dd-ee-ff") == nil)
+        precondition(AccessoryPowerSourceReader.battery(in: [uuidSource], address: "aa-bb-cc-dd-ee-ff",
+            identifier: fixtureUUID.lowercased())?.leftCharging == true,
+            "Power-source UUIDs must match the exact native device UUID")
+        precondition(DeviceBatteryReading.hid(["BatteryPercent": true]) == nil)
+        precondition(DeviceBatteryReading.hid(["BatteryPercent": 10])?.charging == nil)
+        precondition(DeviceBatteryReading.hid(["BatteryPercent": 10, "IsCharging": 2])?.charging == nil)
+        precondition(DeviceBatteryReading(percent: 50).fillingMissing(from: DeviceBatteryReading(left: 12)).left == 12)
         precondition(HIDPeripheralMonitor.address("AA:BB:CC:DD:EE:FF") == "aa-bb-cc-dd-ee-ff")
         precondition(HIDPeripheralMonitor.address("keyboard-serial") == nil)
         var routes = AudioAccessoryTransitions()

@@ -61,6 +61,7 @@ struct IslandView: View {
     @ObservedObject var l10n = L10n.shared
     @ObservedObject private var notices = DeviceNoticeService.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var queuePresented = false
 
     @AppStorage(DefaultsKey.notchStyle) private var notchStyle: String = "notch"
     @AppStorage(DefaultsKey.notchShowVisualizer) private var showVisualizer: Bool = true
@@ -114,6 +115,18 @@ struct IslandView: View {
                 .animation(.spring(response: 0.32, dampingFraction: 0.84), value: isPill)
         }
         .frame(width: IslandController.canvasWidth, height: IslandController.canvasHeight, alignment: .top)
+        .onChange(of: isViewExpanded) { _, expanded in
+            if expanded {
+                YouTubeQueueService.shared.preload(track: music.track)
+            } else {
+                queuePresented = false
+            }
+        }
+        .onChange(of: music.track) { _, next in
+            if isViewExpanded {
+                YouTubeQueueService.shared.preload(track: next)
+            }
+        }
     }
 
     @ViewBuilder
@@ -557,6 +570,7 @@ struct IslandView: View {
                     )
                 }
 
+
                 // Bộ chọn nguồn phát (Auto / Ghim ứng dụng)
                 Menu {
                     Button {
@@ -715,94 +729,99 @@ struct IslandView: View {
                 .padding(.horizontal, 22)
 
                 // Phím điều khiển phát nhạc và âm lượng
-                HStack(spacing: 18) {
-                    Button {
-                        music.openPlayerApp()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: music.controlError == nil ? "arrow.up.forward.app.fill" : "exclamationmark.triangle.fill")
-                                .font(.system(size: 10.5))
-                            Text(track.supportsTransportControls
-                                 ? l10n.string(vi: "Mở App", en: "Open App")
-                                 : l10n.string(vi: "Mở để phát", en: "Open to play"))
+                let showsYouTubeQueue = YouTubeQueueService.isCandidateSource(track)
+                ZStack {
+                    HStack(spacing: 4) {
+                        Button {
+                            music.openPlayerApp()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: music.controlError == nil ? "arrow.up.forward.app.fill" : "exclamationmark.triangle.fill")
+                                    .font(.system(size: 10.5))
+                                Text(
+                                    showsYouTubeQueue
+                                        ? l10n.string(vi: "Mở App", en: "Open")
+                                        : (track.supportsTransportControls
+                                            ? l10n.string(vi: "Mở App", en: "Open App")
+                                            : l10n.string(vi: "Mở để phát", en: "Open to play"))
+                                )
                                 .font(.system(size: 10.5, weight: .semibold))
+                                .lineLimit(1)
+                            }
+                            .foregroundStyle(.white.opacity(0.75))
+                            .padding(.horizontal, showsYouTubeQueue ? 8 : 9)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(Color.white.opacity(0.10)))
                         }
-                        .foregroundStyle(.white.opacity(0.75))
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(Color.white.opacity(0.10)))
-                    }
-                    .buttonStyle(.plain)
-                    .help(music.controlError ?? l10n.string(vi: "Mở ứng dụng đã chọn", en: "Open the selected app"))
+                        .buttonStyle(.plain)
+                        .help(music.controlError ?? l10n.string(vi: "Mở ứng dụng đã chọn", en: "Open the selected app"))
 
-                    Spacer()
+                        if showsYouTubeQueue {
+                            IslandQueueControls(music: music, presented: $queuePresented)
+                        }
 
-                    Button {
-                        music.previousTrack()
-                    } label: {
-                        Image(systemName: "backward.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.88))
-                            .frame(width: 28, height: 28)
+                        Spacer()
+                        IslandAudioControls(
+                            audio: audio,
+                            preferredAppID: music.track?.bundleID
+                                ?? (music.preferredSource == "auto" ? nil : music.preferredSource),
+                            queuePresented: $queuePresented
+                        )
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!track.supportsPrevious || music.isControlPending)
-                    .opacity(track.supportsPrevious ? 1 : 0.35)
+                    HStack(spacing: 18) {
+                        Button {
+                            music.previousTrack()
+                        } label: {
+                            Image(systemName: "backward.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!track.supportsPrevious || music.isControlPending)
+                        .opacity(track.supportsPrevious ? 1 : 0.35)
 
-                    Button {
-                        music.togglePlayPause()
-                    } label: {
-                        Image(systemName: track.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.black)
-                            .frame(width: 32, height: 32)
-                            .background(Circle().fill(Color.white))
-                    }
-                    .buttonStyle(.plain)
-                    .overlay {
-                        if music.isControlPending {
-                            ProgressView().controlSize(.mini)
+                        Button {
+                            music.togglePlayPause()
+                        } label: {
+                            Image(systemName: track.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.black)
                                 .frame(width: 32, height: 32)
                                 .background(Circle().fill(Color.white))
                         }
-                    }
-                    .disabled(!track.supportsTransportControls || music.isControlPending)
-                    .opacity(track.supportsTransportControls ? 1 : 0.35)
-                    .help(music.controlError ?? (track.supportsTransportControls
-                        ? l10n.string(vi: "Phát / Tạm dừng", en: "Play / Pause")
-                        : l10n.string(vi: "Mở ứng dụng để tiếp tục phát nguồn này.", en: "Open the app to resume this source.")))
-
-                    Button {
-                        music.nextTrack()
-                    } label: {
-                        Image(systemName: "forward.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.88))
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!track.supportsNext || music.isControlPending)
-                    .opacity(track.supportsNext ? 1 : 0.35)
-
-                    Spacer()
-
-                    Button {
-                        audio.toggleMasterMute()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: audio.isMasterMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(audio.isMasterMuted ? .red : music.accentColor)
-                            Text("\(Int((audio.isMasterMuted ? 0 : audio.masterVolume) * 100))%")
-                                .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(.white.opacity(0.78))
+                        .buttonStyle(.plain)
+                        .overlay {
+                            if music.isControlPending {
+                                ProgressView().controlSize(.mini)
+                                    .frame(width: 32, height: 32)
+                                    .background(Circle().fill(Color.white))
+                            }
                         }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(Color.white.opacity(0.10)))
+                        .disabled(!track.supportsTransportControls || music.isControlPending)
+                        .opacity(track.supportsTransportControls ? 1 : 0.35)
+                        .help(
+                            music.controlError
+                                ?? (track.supportsTransportControls
+                                    ? l10n.string(vi: "Phát / Tạm dừng", en: "Play / Pause")
+                                    : l10n.string(vi: "Mở ứng dụng để tiếp tục phát nguồn này.", en: "Open the app to resume this source."))
+                        )
+
+                        Button {
+                            music.nextTrack()
+                        } label: {
+                            Image(systemName: "forward.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!track.supportsNext || music.isControlPending)
+                        .opacity(track.supportsNext ? 1 : 0.35)
+
                     }
-                    .buttonStyle(.plain)
                 }
+                .frame(height: 32)
                 .padding(.horizontal, 22)
                 .padding(.bottom, 12)
             } else if pet.isEnabled, let character = pet.look.style.crossPet {
@@ -839,6 +858,15 @@ struct IslandView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, 22)
+                .padding(.bottom, 12)
+            }
+            if music.track == nil {
+                HStack {
+                    Spacer()
+                    IslandAudioControls(audio: audio, preferredAppID: music.track?.bundleID
+                            ?? (music.preferredSource == "auto" ? nil : music.preferredSource))
+                }
                 .padding(.horizontal, 22)
                 .padding(.bottom, 12)
             }

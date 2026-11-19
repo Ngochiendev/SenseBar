@@ -8,7 +8,15 @@ struct MediaRemoteEndpoint {
     let path: NSObject
     var ownsSystemSession = false
 
-    var alive: Bool { MediaProcessIdentity.startTime(owner.pid) == owner.processStart }
+    var alive: Bool {
+        guard MediaProcessIdentity.startTime(owner.pid) == owner.processStart else { return false }
+        // WebKit helpers can outlive Safari; their cached session must not outlive the host app.
+        if presentationBundle != owner.bundle {
+            return NSRunningApplication.runningApplications(withBundleIdentifier: presentationBundle)
+                .contains { !$0.isTerminated }
+        }
+        return true
+    }
 
     init?(pid: Int32, parentBundle: String?, registeredBundle: String? = nil) {
         guard let identity = MediaProcessIdentity.owner(pid: pid, registeredBundle: registeredBundle),
